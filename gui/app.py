@@ -236,14 +236,68 @@ class YouTubeDownloaderApp(ctk.CTk):
         self.select_tab("single")
 
         # Initialize Windows Taskbar Download Progress Bar (Chrome-style live fill)
+        # Also set custom icon via WM_SETICON so Python logo is replaced
         self.taskbar = None
         if sys.platform == "win32":
-            try:
-                self.update_idletasks()
-                hwnd = int(self.frame(), 16)
-                self.taskbar = TaskbarProgress(hwnd)
-            except Exception:
-                self.taskbar = None
+            self.update_idletasks()
+            self.after(300, self._init_win32_taskbar)
+
+    def _init_win32_taskbar(self):
+        """
+        Properly wire up:
+          1. Chrome-style ITaskbarList3 progress bar
+          2. WM_SETICON so Windows shows the app's logo instead of the python.exe snake
+        Must be called AFTER the event loop has started (use self.after(...)).
+        """
+        try:
+            import ctypes
+            user32 = ctypes.windll.user32
+
+            # winfo_id() gives the HWND of the Tk client area; GetParent gives the
+            # decorated top-level Win32 window that shows in the taskbar.
+            tk_hwnd = self.winfo_id()
+            hwnd = user32.GetParent(tk_hwnd)
+            if not hwnd:
+                hwnd = tk_hwnd        # fallback if already top-level
+
+            # ── Load the custom icon from assets/icon.ico ──────────────────────
+            assets_dir = os.path.join(
+                os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets"
+            )
+            ico_file = os.path.join(assets_dir, "icon.ico")
+            if os.path.isfile(ico_file):
+                IMAGE_ICON   = 1
+                LR_LOADFROMFILE = 0x00000010
+                LR_DEFAULTSIZE  = 0x00000040
+
+                # Big icon (shown in taskbar / Alt+Tab)
+                hicon_big = user32.LoadImageW(
+                    None, ico_file, IMAGE_ICON,
+                    256, 256,
+                    LR_LOADFROMFILE
+                )
+                # Small icon (shown in title bar)
+                hicon_small = user32.LoadImageW(
+                    None, ico_file, IMAGE_ICON,
+                    16, 16,
+                    LR_LOADFROMFILE
+                )
+
+                WM_SETICON = 0x0080
+                ICON_SMALL = 0
+                ICON_BIG   = 1
+
+                if hicon_big:
+                    user32.SendMessageW(hwnd, WM_SETICON, ICON_BIG,   hicon_big)
+                if hicon_small:
+                    user32.SendMessageW(hwnd, WM_SETICON, ICON_SMALL, hicon_small)
+
+            # ── ITaskbarList3 progress (Chrome-style green fill) ───────────────
+            self.taskbar = TaskbarProgress(hwnd)
+
+        except Exception:
+            # Non-fatal — app still works without taskbar progress
+            self.taskbar = None
 
     def open_downloads_folder(self):
         d = self.config.get("download_dir", "")
