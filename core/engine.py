@@ -19,6 +19,25 @@ from .playlist_utils import (
 # Quality presets configuration
 # ──────────────────────────────────────────────────────────────
 
+def parse_speed_limit(val):
+    """Convert human speed string (e.g. '2M', '500K') to bytes/sec."""
+    if not val:
+        return None
+    val = str(val).strip().upper()
+    try:
+        if val.endswith('M') or val.endswith('MB'):
+            num = float(val.rstrip('MB'))
+            return int(num * 1024 * 1024)
+        elif val.endswith('K') or val.endswith('KB'):
+            num = float(val.rstrip('KB'))
+            return int(num * 1024)
+        elif val.isdigit():
+            return int(val)
+        else:
+            return int(float(val))
+    except Exception:
+        return None
+
 QUALITY_PRESETS = {
     '1': {
         'name': 'Best Available (Original: 4K / 2K / 1080p)',
@@ -173,6 +192,31 @@ class DownloadEngine:
                     duration = info.get('duration') or 0
                     thumb = info.get('thumbnail')
                     view_count = info.get('view_count')
+                    formats = info.get('formats', [])
+
+                    # Detect available qualities and features
+                    resolutions = []
+                    tags = []
+                    has_60fps = False
+                    for f in formats:
+                        h = f.get('height')
+                        if h and h not in resolutions:
+                            resolutions.append(h)
+                        if f.get('fps') and f.get('fps') >= 60:
+                            has_60fps = True
+
+                    resolutions.sort(reverse=True)
+                    if any(h >= 2160 for h in resolutions):
+                        tags.append("4K Ultra HD")
+                    elif any(h >= 1440 for h in resolutions):
+                        tags.append("2K Quad HD")
+                    elif any(h >= 1080 for h in resolutions):
+                        tags.append("1080p Full HD")
+                    elif any(h >= 720 for h in resolutions):
+                        tags.append("720p HD")
+
+                    if has_60fps:
+                        tags.append("60 FPS")
 
                     return {
                         'is_playlist': False,
@@ -183,13 +227,15 @@ class DownloadEngine:
                         'view_count': view_count,
                         'like_count': info.get('like_count'),
                         'upload_date': info.get('upload_date', ''),
+                        'resolutions': resolutions,
+                        'tags': tags,
                         'url': url
                     }
 
         except Exception as e:
             return {'error': str(e)}
 
-    def build_ydl_opts(self, save_dir, quality_key='1', outtmpl=None, progress_hook=None):
+    def build_ydl_opts(self, save_dir, quality_key='1', outtmpl=None, progress_hook=None, speed_limit=None):
         """Construct yt-dlp options dictionary."""
         preset = QUALITY_PRESETS.get(str(quality_key), QUALITY_PRESETS['1'])
         ffmpeg_dir = self.ffmpeg_dir
@@ -225,6 +271,10 @@ class DownloadEngine:
             'source_address': '0.0.0.0',
             'prefer_free_formats': False,
         }
+
+        limit_bytes = parse_speed_limit(speed_limit)
+        if limit_bytes:
+            ydl_opts['ratelimit'] = limit_bytes
 
         if progress_hook:
             ydl_opts['progress_hooks'] = [progress_hook]
@@ -341,7 +391,9 @@ class DownloadEngine:
         progress_cb=None,
         status_cb=None,
         cancel_event=None,
-        extra_opts=None
+        extra_opts=None,
+        speed_limit=None,
+        outtmpl=None
     ):
         """
         Download a single video with live callbacks.
@@ -370,7 +422,7 @@ class DownloadEngine:
             elif d["status"] == "finished" and status_cb:
                 status_cb("Merging formats & finalizing file...", "info")
 
-        ydl_opts = self.build_ydl_opts(save_dir, quality_key=quality_key, progress_hook=hook)
+        ydl_opts = self.build_ydl_opts(save_dir, quality_key=quality_key, outtmpl=outtmpl, progress_hook=hook, speed_limit=speed_limit)
         ydl_opts['noplaylist'] = True
         if extra_opts:
             ydl_opts.update(extra_opts)
@@ -443,7 +495,8 @@ class DownloadEngine:
         overall_progress_cb=None,
         video_progress_cb=None,
         status_cb=None,
-        cancel_event=None
+        cancel_event=None,
+        speed_limit=None
     ):
         """
         Download playlist/show with dedicated folder and episode selection.
@@ -546,7 +599,7 @@ class DownloadEngine:
                     eta_str = f"{int(eta)}s" if eta else "--"
                     video_progress_cb(pct, downloaded, total, speed_str, eta_str)
 
-            ydl_opts = self.build_ydl_opts(target_dir, quality_key=quality_key, outtmpl=outtmpl, progress_hook=per_video_hook)
+            ydl_opts = self.build_ydl_opts(target_dir, quality_key=quality_key, outtmpl=outtmpl, progress_hook=per_video_hook, speed_limit=speed_limit)
             ydl_opts['noplaylist'] = True
 
             try:

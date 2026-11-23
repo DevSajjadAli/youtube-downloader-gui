@@ -201,10 +201,33 @@ class YouTubeDownloaderApp(ctk.CTk):
             text_color="#4B5563",
             anchor="e"
         )
-        self.active_badge.grid(row=0, column=2, padx=(4, 14), pady=0, sticky="e")
+        self.active_badge.grid(row=0, column=2, padx=(4, 8), pady=0, sticky="e")
+
+        open_dl_btn = ctk.CTkButton(
+            self.status_bar,
+            text="📂 Downloads",
+            width=85,
+            height=20,
+            font=ctk.CTkFont(size=10),
+            corner_radius=4,
+            fg_color="#1F2937",
+            hover_color="#374151",
+            command=self.open_downloads_folder
+        )
+        open_dl_btn.grid(row=0, column=3, padx=(0, 12), pady=0, sticky="e")
 
         # Default tab
         self.select_tab("single")
+
+    def open_downloads_folder(self):
+        d = self.config.get("download_dir", "")
+        if not os.path.isdir(d):
+            try:
+                os.makedirs(d, exist_ok=True)
+            except OSError:
+                pass
+        if os.path.isdir(d):
+            subprocess.Popen(["explorer", d])
 
     # ── Tab Navigation ───────────────────────────────────────────────────────
 

@@ -8,7 +8,14 @@ DEFAULT_CONFIG = {
     "color_theme": "blue",
     "skip_existing": True,
     "filename_format": "numbered_title",  # "numbered_title", "numeric", "title"
-    "auto_fetch_info": True
+    "auto_fetch_info": True,
+    "clipboard_watch": False,
+    "download_subtitles": False,
+    "embed_thumbnail": False,
+    "sound_notify": True,
+    "auto_open_folder": False,
+    "speed_limit": "",
+    "output_template": "%(title)s.%(ext)s"
 }
 
 class ConfigManager:
