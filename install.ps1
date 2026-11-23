@@ -72,20 +72,24 @@ Remove-Item $RepoExtracted -Recurse -Force -ErrorAction SilentlyContinue
 Remove-Item $RepoZip -Force -ErrorAction SilentlyContinue
 Write-Host "      Files installed successfully." -ForegroundColor Green
 
-# Step 4: Install Python packages and generate icons
+# Step 4: Install Python packages
 Write-Host "[4/5] Installing Python packages..." -ForegroundColor Yellow
 $reqFile = Join-Path $InstallDir "requirements.txt"
 & $python -m pip install --upgrade pip --quiet
 & $python -m pip install -r $reqFile --quiet
 Write-Host "      Packages installed." -ForegroundColor Green
 
-Write-Host "      Generating application icons..." -ForegroundColor Yellow
-$iconScript = Join-Path $InstallDir "assets\generate_icons.py"
-if (Test-Path $iconScript) {
-    Set-Location $InstallDir
-    & $python $iconScript 2>&1 | Out-Null
-    Write-Host "      Icons generated." -ForegroundColor Green
+# Ensure assets are present (already bundled with repo)
+$iconFile = Join-Path $InstallDir "assets\icon.ico"
+if (-not (Test-Path $iconFile)) {
+    $iconScript = Join-Path $InstallDir "assets\generate_icons.py"
+    if (Test-Path $iconScript) {
+        try {
+            Start-Process -FilePath $python -ArgumentList "`"$iconScript`"" -WorkingDirectory $InstallDir -NoNewWindow -Wait
+        } catch {}
+    }
 }
+Write-Host "      Application assets verified." -ForegroundColor Green
 
 # Step 5: Check FFmpeg
 Write-Host "[5/5] Checking FFmpeg..." -ForegroundColor Yellow
@@ -117,7 +121,7 @@ if (-not (Test-Path $pythonwPath)) {
 }
 
 $mainScript = Join-Path $InstallDir "main.py"
-$iconFile   = Join-Path $InstallDir "assets\icon.ico"
+$iconLocation = Join-Path $InstallDir "assets\icon.ico"
 
 # Desktop shortcut
 $DesktopPath = $WshShell.SpecialFolders("Desktop")
@@ -126,7 +130,7 @@ $shortcut = $WshShell.CreateShortcut($DesktopLink)
 $shortcut.TargetPath       = $pythonwPath
 $shortcut.Arguments        = "`"$mainScript`""
 $shortcut.WorkingDirectory = $InstallDir
-if (Test-Path $iconFile) { $shortcut.IconLocation = $iconFile }
+if (Test-Path $iconLocation) { $shortcut.IconLocation = $iconLocation }
 $shortcut.Description      = "YouTube Downloader Pro"
 $shortcut.Save()
 
@@ -138,19 +142,20 @@ $shortcut2 = $WshShell.CreateShortcut($StartLink)
 $shortcut2.TargetPath       = $pythonwPath
 $shortcut2.Arguments        = "`"$mainScript`""
 $shortcut2.WorkingDirectory = $InstallDir
-if (Test-Path $iconFile) { $shortcut2.IconLocation = $iconFile }
+if (Test-Path $iconLocation) { $shortcut2.IconLocation = $iconLocation }
 $shortcut2.Description      = "YouTube Downloader Pro"
 $shortcut2.Save()
 
 Write-Host ""
 Write-Host "=============================================" -ForegroundColor Green
-Write-Host "   Installation Complete! Launching Application..." -ForegroundColor Green
+Write-Host "   Installation Complete!" -ForegroundColor Green
 Write-Host "=============================================" -ForegroundColor Green
 Write-Host ""
 Write-Host "   - Desktop shortcut created" -ForegroundColor White
 Write-Host "   - Start Menu entry added" -ForegroundColor White
 Write-Host "   - Installed to: $InstallDir" -ForegroundColor Gray
 Write-Host ""
+Write-Host "   Launching YouTube Downloader Pro..." -ForegroundColor Cyan
 
 # Launch application
 try {
