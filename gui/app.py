@@ -1,4 +1,5 @@
 import os
+import sys
 import subprocess
 import customtkinter as ctk
 from PIL import Image
@@ -7,6 +8,7 @@ from core.config import ConfigManager
 from core.engine import DownloadEngine
 from core.ffmpeg_utils import is_ffmpeg_available
 from gui import icon_loader as icons
+from gui.taskbar import TaskbarProgress, set_app_user_model_id
 
 from .views.single_view import SingleVideoView
 from .views.playlist_view import PlaylistView
@@ -29,6 +31,9 @@ class YouTubeDownloaderApp(ctk.CTk):
     def __init__(self):
         super().__init__()
 
+        # Register Windows AppUserModelID so taskbar button shows custom icon instead of generic Python
+        set_app_user_model_id("DevSajjadAli.YouTubeDownloaderPro.Desktop.v2")
+
         # Core services
         self.config = ConfigManager()
         self.engine = DownloadEngine()
@@ -43,12 +48,23 @@ class YouTubeDownloaderApp(ctk.CTk):
         self.geometry("1150x740")
         self.minsize(960, 640)
 
-        # Icon
+        # High-res Window & Taskbar Icons
         assets_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets")
         ico_file = os.path.join(assets_dir, "icon.ico")
+        png_file = os.path.join(assets_dir, "icon.png")
+
         if os.path.isfile(ico_file):
             try:
                 self.iconbitmap(ico_file)
+            except Exception:
+                pass
+
+        if os.path.isfile(png_file):
+            try:
+                from PIL import ImageTk
+                img = ImageTk.PhotoImage(file=png_file)
+                self.wm_iconphoto(True, img)
+                self._taskbar_icon_ref = img
             except Exception:
                 pass
 
@@ -219,6 +235,16 @@ class YouTubeDownloaderApp(ctk.CTk):
         # Default tab
         self.select_tab("single")
 
+        # Initialize Windows Taskbar Download Progress Bar (Chrome-style live fill)
+        self.taskbar = None
+        if sys.platform == "win32":
+            try:
+                self.update_idletasks()
+                hwnd = int(self.frame(), 16)
+                self.taskbar = TaskbarProgress(hwnd)
+            except Exception:
+                self.taskbar = None
+
     def open_downloads_folder(self):
         d = self.config.get("download_dir", "")
         if not os.path.isdir(d):
@@ -228,6 +254,38 @@ class YouTubeDownloaderApp(ctk.CTk):
                 pass
         if os.path.isdir(d):
             subprocess.Popen(["explorer", d])
+
+    def set_taskbar_progress(self, percent: float):
+        """Update live taskbar progress bar (0 to 100) exactly like Google Chrome."""
+        if self.taskbar:
+            self.taskbar.set_progress(percent)
+
+    def set_taskbar_indeterminate(self):
+        """Show pulsing/marquee progress on taskbar icon."""
+        if self.taskbar:
+            self.taskbar.set_indeterminate()
+
+    def set_taskbar_error(self):
+        """Show red error indicator on taskbar icon."""
+        if self.taskbar:
+            self.taskbar.set_error()
+
+    def set_taskbar_paused(self):
+        """Show yellow paused indicator on taskbar icon."""
+        if self.taskbar:
+            self.taskbar.set_paused()
+
+    def clear_taskbar_progress(self):
+        """Clear taskbar progress bar."""
+        if self.taskbar:
+            self.taskbar.clear()
+
+    def set_active(self, downloading: bool):
+        if downloading:
+            self.active_badge.configure(text="● Downloading...", text_color="#22C55E")
+        else:
+            self.active_badge.configure(text="Idle", text_color="#4B5563")
+            self.clear_taskbar_progress()
 
     # ── Tab Navigation ───────────────────────────────────────────────────────
 
@@ -263,12 +321,6 @@ class YouTubeDownloaderApp(ctk.CTk):
         self.log_view.append_log(message, level)
         preview = message[:72] + "..." if len(message) > 72 else message
         self.status_text.configure(text=preview)
-
-    def set_active(self, downloading: bool):
-        if downloading:
-            self.active_badge.configure(text="● Downloading", text_color="#22C55E")
-        else:
-            self.active_badge.configure(text="Idle", text_color="#4B5563")
 
     # ── Appearance ───────────────────────────────────────────────────────────
 

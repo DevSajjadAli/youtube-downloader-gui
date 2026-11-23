@@ -260,6 +260,9 @@ class QueueView(ctk.CTkFrame):
                 item["progress"] = frac
                 if idx in self._item_bars:
                     self.after(0, lambda f=frac: self._item_bars[idx].set(f))
+                if total > 0:
+                    overall_q_pct = ((idx + frac) / total) * 100.0
+                    self.app.set_taskbar_progress(overall_q_pct)
 
             if item.get("type") == "single":
                 success, path = self.app.engine.download_single(

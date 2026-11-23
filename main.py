@@ -20,6 +20,11 @@ if sys.platform == "win32":
         sys.stderr.reconfigure(encoding='utf-8', errors='replace')
     except Exception:
         pass
+    try:
+        import ctypes
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("DevSajjadAli.YouTubeDownloaderPro.Desktop.v2")
+    except Exception:
+        pass
 
 def launch_gui():
     """Launch the CustomTkinter GUI interface."""

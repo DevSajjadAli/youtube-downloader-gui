@@ -576,9 +576,15 @@ class PlaylistView(ctk.CTkScrollableFrame):
         self.overall_bar.configure(progress_color="#3B82F6")
         self.app.set_active(True)
 
+        current_step_holder = [1]
+        total_selected = len(selected_eps)
+
         def overall_progress_cb(step, total, video_title):
+            current_step_holder[0] = step
             def update():
                 self.overall_bar.set(step / total if total > 0 else 0)
+                overall_pct = (step / total * 100) if total > 0 else 0
+                self.app.set_taskbar_progress(overall_pct)
                 self.overall_label.configure(
                     text=f"Overall Progress: [{step}/{total}] — {clean_folder}",
                     text_color="#F9FAFB"
@@ -590,6 +596,9 @@ class PlaylistView(ctk.CTkScrollableFrame):
         def video_progress_cb(pct, downloaded, total, speed, eta):
             def update():
                 self.video_bar.set(pct / 100.0)
+                if total_selected > 0:
+                    blended = ((current_step_holder[0] - 1) + (pct / 100.0)) / total_selected * 100.0
+                    self.app.set_taskbar_progress(blended)
                 dl_mb = downloaded / 1048576
                 tot_mb = total / 1048576 if total > 0 else 0
                 self.stats_label.configure(
@@ -658,6 +667,7 @@ class PlaylistView(ctk.CTkScrollableFrame):
             self.cancel_event.set()
             self.cancel_btn.configure(state="disabled")
             self.overall_label.configure(text="Stopping playlist download...", text_color="#F59E0B")
+            self.app.clear_taskbar_progress()
 
     def add_to_queue(self):
         url = self.url_entry.get().strip()

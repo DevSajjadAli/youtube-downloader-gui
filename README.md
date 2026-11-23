@@ -21,6 +21,7 @@ Download YouTube videos, full playlists, TV shows, and audio-only tracks — in 
 
 | Feature | Description |
 |---------|-------------|
+| **Windows Taskbar Progress** | Live Chrome-style download progress bar and icon on the Windows Taskbar |
 | **4K / 2K / 1080p / 720p / 480p / 360p** | Full quality selection with FFmpeg-powered merging |
 | **MP3 Audio Extraction** | Highest quality audio-only downloads |
 | **Playlist & TV Show Manager** | Each playlist saved to its own named folder automatically |

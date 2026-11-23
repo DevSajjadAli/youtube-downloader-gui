@@ -482,6 +482,7 @@ class SingleVideoView(ctk.CTkScrollableFrame):
         def progress_cb(pct, downloaded, total, speed, eta):
             def update():
                 self.progress_bar.set(pct / 100.0)
+                self.app.set_taskbar_progress(pct)
                 dl_mb = downloaded / 1048576
                 tot_mb = total / 1048576 if total > 0 else 0
                 self.stats_label.configure(
@@ -492,6 +493,8 @@ class SingleVideoView(ctk.CTkScrollableFrame):
         def status_cb(msg, level="info"):
             colors = {"success": "#22C55E", "error": "#EF4444", "warning": "#F59E0B"}
             color = colors.get(level, "#F3F4F6")
+            if "merging" in msg.lower() or "finalizing" in msg.lower():
+                self.app.set_taskbar_indeterminate()
             self.after(0, lambda: self.status_label.configure(text=msg, text_color=color))
             self.app.log(msg, level)
 
@@ -559,6 +562,7 @@ class SingleVideoView(ctk.CTkScrollableFrame):
             self.cancel_event.set()
             self.cancel_btn.configure(state="disabled")
             self.status_label.configure(text="Cancelling download...", text_color="#F59E0B")
+            self.app.clear_taskbar_progress()
 
     def add_to_queue(self):
         url = self.url_entry.get().strip()
