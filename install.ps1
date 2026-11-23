@@ -40,11 +40,20 @@ if (-not $python) {
     exit 1
 }
 
+# Close any running instance of the app before updating
+try {
+    Get-CimInstance Win32_Process -Filter "Name LIKE 'python%'" | Where-Object { $_.CommandLine -like "*YoutubeDownloaderGUI*" } | ForEach-Object {
+        Write-Host "      Closing running instance (PID $($_.ProcessId))..." -ForegroundColor Yellow
+        Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
+    }
+    Start-Sleep -Milliseconds 600
+} catch {}
+
 # Step 2: Download latest release
 Write-Host "[2/5] Downloading latest release from GitHub..." -ForegroundColor Yellow
 try {
-    if (Test-Path $RepoZip) { Remove-Item $RepoZip -Force }
-    if (Test-Path $RepoExtracted) { Remove-Item $RepoExtracted -Recurse -Force }
+    if (Test-Path $RepoZip) { Remove-Item $RepoZip -Force -ErrorAction SilentlyContinue }
+    if (Test-Path $RepoExtracted) { Remove-Item $RepoExtracted -Recurse -Force -ErrorAction SilentlyContinue }
     Invoke-WebRequest -Uri $RepoUrl -OutFile $RepoZip -UseBasicParsing
     Expand-Archive -Path $RepoZip -DestinationPath $env:TEMP -Force
     Write-Host "      Downloaded and extracted." -ForegroundColor Green
@@ -55,10 +64,13 @@ try {
 
 # Step 3: Install to user directory
 Write-Host "[3/5] Installing to $InstallDir ..." -ForegroundColor Yellow
-if (Test-Path $InstallDir) { Remove-Item $InstallDir -Recurse -Force }
-Move-Item $RepoExtracted $InstallDir
+if (-not (Test-Path $InstallDir)) {
+    New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
+}
+Copy-Item -Path "$RepoExtracted\*" -Destination $InstallDir -Recurse -Force
+Remove-Item $RepoExtracted -Recurse -Force -ErrorAction SilentlyContinue
 Remove-Item $RepoZip -Force -ErrorAction SilentlyContinue
-Write-Host "      Files installed." -ForegroundColor Green
+Write-Host "      Files installed successfully." -ForegroundColor Green
 
 # Step 4: Install Python packages and generate icons
 Write-Host "[4/5] Installing Python packages..." -ForegroundColor Yellow
@@ -132,12 +144,17 @@ $shortcut2.Save()
 
 Write-Host ""
 Write-Host "=============================================" -ForegroundColor Green
-Write-Host "   Installation Complete!" -ForegroundColor Green
+Write-Host "   Installation Complete! Launching Application..." -ForegroundColor Green
 Write-Host "=============================================" -ForegroundColor Green
 Write-Host ""
 Write-Host "   - Desktop shortcut created" -ForegroundColor White
 Write-Host "   - Start Menu entry added" -ForegroundColor White
 Write-Host "   - Installed to: $InstallDir" -ForegroundColor Gray
 Write-Host ""
-Write-Host "   Double-click 'YouTube Downloader Pro' on your Desktop to launch." -ForegroundColor Cyan
-Write-Host ""
+
+# Launch application
+try {
+    Start-Process -FilePath $pythonwPath -ArgumentList "`"$mainScript`"" -WorkingDirectory $InstallDir
+} catch {
+    Write-Host "   Launch using the shortcut on your Desktop." -ForegroundColor Cyan
+}
