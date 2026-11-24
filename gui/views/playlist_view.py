@@ -10,7 +10,13 @@ except ImportError:
     winsound = None
 
 from core.engine import QUALITY_PRESETS
-from core.playlist_utils import parse_episodes, sanitize_folder_name
+from core.playlist_utils import (
+    parse_episodes,
+    sanitize_folder_name,
+    sort_playlist_entries,
+    fetch_playlist_upload_dates,
+    extract_episode_number
+)
 from gui import icon_loader as icons
 from gui.views.history_view import append_history
 
@@ -26,6 +32,7 @@ class PlaylistView(ctk.CTkScrollableFrame):
         self.config = app.config
 
         self.playlist_info = None
+        self._current_entries = []
         self.cancel_event = None
         self.is_downloading = False
         self._last_save_path = ""
@@ -249,6 +256,38 @@ class PlaylistView(ctk.CTkScrollableFrame):
         ctk.CTkButton(btn_box, text="Invert", width=60, height=28, corner_radius=4,
                       fg_color="#374151", hover_color="#4B5563",
                       command=self._invert_checks).pack(side="left", padx=2)
+
+        # Sort & Release Date Controls Bar (Chronological Ep 1 to End)
+        sort_bar = ctk.CTkFrame(self.table_card, fg_color="#181825", corner_radius=6)
+        sort_bar.pack(fill="x", padx=16, pady=(0, 8))
+
+        ctk.CTkLabel(
+            sort_bar, text="Sort / Release Order:",
+            font=ctk.CTkFont(size=11, weight="bold"), text_color="#9CA3AF"
+        ).pack(side="left", padx=(10, 6), pady=6)
+
+        self.sort_options = [
+            "Oldest Upload First (Ep 1 → End) [Recommended]",
+            "Episode Number in Title (Ep 1 → End)",
+            "Reverse Order (Invert Playlist)",
+            "Newest Upload First (End → Ep 1)",
+            "Original YouTube Order"
+        ]
+        self.sort_menu = ctk.CTkOptionMenu(
+            sort_bar, values=self.sort_options,
+            height=28, width=320, font=ctk.CTkFont(size=11),
+            corner_radius=4, command=self._on_sort_changed
+        )
+        self.sort_menu.set("Oldest Upload First (Ep 1 → End) [Recommended]")
+        self.sort_menu.pack(side="left", padx=4, pady=6)
+
+        self.fetch_dates_btn = ctk.CTkButton(
+            sort_bar, text="📅 Fetch Upload Dates",
+            height=28, width=150, font=ctk.CTkFont(size=11),
+            fg_color="#1F2937", hover_color="#374151", corner_radius=4,
+            command=self._fetch_all_upload_dates
+        )
+        self.fetch_dates_btn.pack(side="right", padx=10, pady=6)
 
         # Scrollable checklist
         self.checklist_scroll = ctk.CTkScrollableFrame(self.table_card, height=180, corner_radius=8)
@@ -482,6 +521,36 @@ class PlaylistView(ctk.CTkScrollableFrame):
 
         threading.Thread(target=worker, daemon=True).start()
 
+    def _on_sort_changed(self, choice=None):
+        if not self._current_entries:
+            return
+        choice = choice or self.sort_menu.get()
+        mode_map = {
+            "Oldest Upload First (Ep 1 → End) [Recommended]": "date_asc",
+            "Episode Number in Title (Ep 1 → End)": "ep_title_asc",
+            "Reverse Order (Invert Playlist)": "reverse",
+            "Newest Upload First (End → Ep 1)": "date_desc",
+            "Original YouTube Order": "original"
+        }
+        mode = mode_map.get(choice, "date_asc")
+        self._current_entries = sort_playlist_entries(self._current_entries, sort_mode=mode)
+        self._build_interactive_checklist(self._current_entries)
+        self._sync_checks_from_range()
+
+    def _fetch_all_upload_dates(self):
+        if not self._current_entries:
+            return
+        self.fetch_dates_btn.configure(state="disabled", text="Fetching dates...")
+        def worker():
+            def cb(done, total):
+                self.after(0, lambda d=done, t=total: self.fetch_dates_btn.configure(text=f"Dates {d}/{t}..."))
+            fetch_playlist_upload_dates(self._current_entries, max_workers=6, progress_cb=cb)
+            def done():
+                self.fetch_dates_btn.configure(state="normal", text="✓ Dates Loaded")
+                self._on_sort_changed()
+            self.after(0, done)
+        threading.Thread(target=worker, daemon=True).start()
+
     def display_playlist_info(self, info):
         self.fetch_btn.configure(state="normal", text="Fetch Playlist")
         if not info or info.get("error"):
@@ -493,7 +562,8 @@ class PlaylistView(ctk.CTkScrollableFrame):
         self.playlist_info = info
         detected_title = info.get("title", "YouTube Playlist")
         channel = info.get("uploader", "Unknown Channel")
-        count = info.get("count", 0)
+        raw_entries = info.get("entries", [])
+        count = len(raw_entries)
 
         self.pl_title_label.configure(text=f"📋  {detected_title}", text_color=("#F9FAFB", "#F9FAFB"))
         self.meta_label.configure(text=f"Channel: {channel}  •  Total Videos: {count}")
@@ -502,10 +572,25 @@ class PlaylistView(ctk.CTkScrollableFrame):
         self.folder_entry.delete(0, "end")
         self.folder_entry.insert(0, suggested)
 
-        # Build interactive checklist
-        self._build_interactive_checklist(info.get("entries", []))
+        # Intelligent sorting to ensure correct series range:
+        # If the playlist was reversed on YouTube (newest episode first), detect and order Ep 1 -> End
+        self._current_entries = list(raw_entries)
+        if len(self._current_entries) >= 2:
+            first_ep = extract_episode_number(self._current_entries[0].get("title", ""))
+            last_ep = extract_episode_number(self._current_entries[-1].get("title", ""))
+            if first_ep is not None and last_ep is not None and first_ep > last_ep:
+                self._current_entries = sort_playlist_entries(self._current_entries, sort_mode="ep_title_asc")
+                self.sort_menu.set("Episode Number in Title (Ep 1 → End)")
+            else:
+                self._current_entries = sort_playlist_entries(self._current_entries, sort_mode="date_asc")
+                self.sort_menu.set("Oldest Upload First (Ep 1 → End) [Recommended]")
+        else:
+            self._current_entries = sort_playlist_entries(self._current_entries, sort_mode="date_asc")
 
-        self.overall_label.configure(text=f"Ready — {count} episodes loaded into checklist.")
+        # Build interactive checklist with sorted episodes
+        self._build_interactive_checklist(self._current_entries)
+
+        self.overall_label.configure(text=f"Ready — {count} episodes sorted chronologically (Ep 1 → End).")
         self.app.log(f"Loaded playlist: {detected_title} ({count} episodes)", "info")
 
     def _build_interactive_checklist(self, entries):
@@ -524,6 +609,8 @@ class PlaylistView(ctk.CTkScrollableFrame):
             dur = entry.get("duration", 0) or 0
             m, s = divmod(int(dur), 60)
             dur_str = f" ({m}:{s:02d})" if dur else ""
+            date_val = entry.get("date_str") or entry.get("upload_date")
+            date_badge = f"  [{date_val[:10]}]" if date_val else ""
 
             var = ctk.BooleanVar(value=True)
 
@@ -539,7 +626,7 @@ class PlaylistView(ctk.CTkScrollableFrame):
             cb.grid(row=0, column=0, padx=(8, 4), pady=4, sticky="w")
 
             t_lbl = ctk.CTkLabel(
-                row_f, text=f"{title}{dur_str}",
+                row_f, text=f"{title}{date_badge}{dur_str}",
                 font=ctk.CTkFont(size=11), anchor="w"
             )
             t_lbl.grid(row=0, column=1, sticky="w", padx=4, pady=4)
@@ -619,6 +706,9 @@ class PlaylistView(ctk.CTkScrollableFrame):
             self.app.log(msg, level)
 
         def worker():
+            cached_data = dict(self.playlist_info) if self.playlist_info else {}
+            cached_data["entries"] = self._current_entries
+
             success, paths = self.engine.download_playlist(
                 url, base_dir,
                 folder_name=clean_folder,
@@ -631,7 +721,7 @@ class PlaylistView(ctk.CTkScrollableFrame):
                 status_cb=status_cb,
                 cancel_event=self.cancel_event,
                 speed_limit=spd_limit,
-                cached_info=self.playlist_info
+                cached_info=cached_data
             )
             title = self.playlist_info.get("title", clean_folder) if self.playlist_info else clean_folder
             append_history(self.config, {
@@ -674,6 +764,7 @@ class PlaylistView(ctk.CTkScrollableFrame):
         self.url_entry.delete(0, "end")
         self.folder_entry.delete(0, "end")
         self.playlist_info = None
+        self._current_entries = []
         self.pl_title_label.configure(
             text="Paste a playlist link above to inspect all episodes in real-time",
             text_color=("#F9FAFB", "#F9FAFB")
@@ -724,6 +815,9 @@ class PlaylistView(ctk.CTkScrollableFrame):
         selected_eps = self.get_episodes_to_download()
         title = self.playlist_info.get("title") if self.playlist_info else clean_folder
 
+        cached_data = dict(self.playlist_info) if self.playlist_info else {}
+        cached_data["entries"] = self._current_entries
+
         self.app.queue_view.add_item({
             "type": "playlist",
             "url": url,
@@ -735,7 +829,7 @@ class PlaylistView(ctk.CTkScrollableFrame):
             "skip_existing": skip_existing,
             "filename_format": fn_fmt,
             "status": "Pending",
-            "cached_info": self.playlist_info
+            "cached_info": cached_data
         })
         self.app.log(f"Added playlist to queue: {title}", "info")
         # Reset form immediately so user can enter another playlist or link

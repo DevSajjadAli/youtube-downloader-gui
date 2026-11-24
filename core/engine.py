@@ -43,43 +43,43 @@ QUALITY_PRESETS = {
         'name': 'Best Available (Original: 4K / 2K / 1080p)',
         'short': 'Best Available',
         'badge': '4K / 1080p',
-        'format_ffmpeg': 'bestvideo+bestaudio/best',
+        'format_ffmpeg': 'bestvideo[vcodec^=avc1]+bestaudio[acodec^=mp4a]/bestvideo[vcodec^=avc]+bestaudio[acodec^=mp4a]/bestvideo+bestaudio/best',
         'format_no_ffmpeg': 'best[ext=mp4]/best',
         'is_audio': False,
         'merge_fmt': 'mp4'
     },
     '2': {
-        'name': '1080p (Full HD)',
+        'name': '1080p (Full HD — LED TV Compatible)',
         'short': '1080p Full HD',
         'badge': '1080p',
-        'format_ffmpeg': 'bestvideo[height<=1080]+bestaudio/best[height<=1080]/best',
+        'format_ffmpeg': 'bestvideo[height<=1080][vcodec^=avc1]+bestaudio[acodec^=mp4a]/bestvideo[height<=1080][vcodec^=avc]+bestaudio[acodec^=mp4a]/bestvideo[height<=1080]+bestaudio[acodec^=mp4a]/best[height<=1080][ext=mp4]/bestvideo[height<=1080]+bestaudio/best[height<=1080]/best',
         'format_no_ffmpeg': 'best[height<=1080][ext=mp4]/best[height<=1080]/best',
         'is_audio': False,
         'merge_fmt': 'mp4'
     },
     '3': {
-        'name': '720p (HD — Fast & Balanced)',
-        'short': '720p HD',
+        'name': '720p (HD — LED TV & All Devices Compatible)',
+        'short': '720p HD (Universal)',
         'badge': '720p',
-        'format_ffmpeg': 'bestvideo[height<=720]+bestaudio/best[height<=720]/best',
+        'format_ffmpeg': 'bestvideo[height<=720][vcodec^=avc1]+bestaudio[acodec^=mp4a]/bestvideo[height<=720][vcodec^=avc]+bestaudio[acodec^=mp4a]/bestvideo[height<=720]+bestaudio[acodec^=mp4a]/best[height<=720][ext=mp4]/bestvideo[height<=720]+bestaudio/best[height<=720]/best',
         'format_no_ffmpeg': 'best[height<=720][ext=mp4]/best[height<=720]/best',
         'is_audio': False,
         'merge_fmt': 'mp4'
     },
     '4': {
-        'name': '480p (SD — Data Saver)',
+        'name': '480p (SD — Universal MP4)',
         'short': '480p SD',
         'badge': '480p',
-        'format_ffmpeg': 'bestvideo[height<=480]+bestaudio/best[height<=480]/best',
+        'format_ffmpeg': 'bestvideo[height<=480][vcodec^=avc1]+bestaudio[acodec^=mp4a]/bestvideo[height<=480][vcodec^=avc]+bestaudio[acodec^=mp4a]/best[height<=480][ext=mp4]/bestvideo[height<=480]+bestaudio/best[height<=480]/best',
         'format_no_ffmpeg': 'best[height<=480][ext=mp4]/best[height<=480]/best',
         'is_audio': False,
         'merge_fmt': 'mp4'
     },
     '5': {
-        'name': '360p (Low — Smallest File)',
+        'name': '360p (Low — Smallest MP4)',
         'short': '360p Low',
         'badge': '360p',
-        'format_ffmpeg': 'bestvideo[height<=360]+bestaudio/best[height<=360]/best',
+        'format_ffmpeg': 'bestvideo[height<=360][vcodec^=avc1]+bestaudio[acodec^=mp4a]/bestvideo[height<=360][vcodec^=avc]+bestaudio[acodec^=mp4a]/best[height<=360][ext=mp4]/bestvideo[height<=360]+bestaudio/best[height<=360]/best',
         'format_no_ffmpeg': 'best[height<=360][ext=mp4]/best[height<=360]/best',
         'is_audio': False,
         'merge_fmt': 'mp4'
@@ -281,6 +281,11 @@ class DownloadEngine:
 
         if merge_fmt and not preset['is_audio']:
             ydl_opts['merge_output_format'] = merge_fmt
+            if ffmpeg_dir:
+                # Guarantee audio inside MP4 container is standard AAC stereo for 100% LED TV playback
+                ydl_opts['postprocessor_args'] = {
+                    'Merger': ['-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k']
+                }
 
         if ffmpeg_dir:
             ydl_opts['ffmpeg_location'] = ffmpeg_dir

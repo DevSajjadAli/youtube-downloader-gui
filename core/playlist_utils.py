@@ -3,6 +3,151 @@ import re
 from collections import Counter
 import yt_dlp
 
+def extract_episode_number(title):
+    """
+    Extract integer episode number from a video title.
+    Matches: 'Episode 01', 'Ep 2', 'Part 3', '#10', 'E05', '1 - Title', etc.
+    """
+    if not title:
+        return None
+    patterns = [
+        r'\b(?:ep|episode|part|pt|e)\.?\s*#?\s*0*(\d+)\b',
+        r'#\s*0*(\d+)\b',
+        r'\[\s*0*(\d+)\s*\]',
+        r'\(\s*0*(\d+)\s*\)',
+        r'^\s*0*(\d+)\s*[-–.]\s+',
+        r'-\s*0*(\d+)\s*-',
+        r'\b0*(\d+)\s*(?:st|nd|rd|th)?\s*(?:ep|episode|part)\b',
+    ]
+    for p in patterns:
+        m = re.search(p, title, re.IGNORECASE)
+        if m:
+            try:
+                return int(m.group(1))
+            except ValueError:
+                pass
+    return None
+
+def fetch_upload_date_for_video(video_id_or_url):
+    """
+    Fast extraction of upload date for a YouTube video using web scraping.
+    Returns ISO date string (e.g. '2023-05-12') or formatted 'YYYYMMDD' or None.
+    """
+    vid = video_id_or_url
+    if 'watch?v=' in str(vid):
+        m = re.search(r'v=([a-zA-Z0-9_-]{11})', str(vid))
+        if m:
+            vid = m.group(1)
+    elif str(vid).startswith('http'):
+        vid = str(vid).rstrip('/').split('/')[-1]
+
+    if not vid or len(str(vid)) != 11:
+        return None
+
+    import urllib.request
+    url = f"https://www.youtube.com/watch?v={vid}"
+    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
+    try:
+        with urllib.request.urlopen(req, timeout=6) as resp:
+            html = resp.read().decode("utf-8", errors="ignore")
+            m = re.search(r'"uploadDate":"([^"]+)"', html)
+            if m:
+                # Return YYYY-MM-DD
+                return m.group(1)[:10]
+            m = re.search(r'"dateText":\{"simpleText":"([^"]+)"\}', html)
+            if m:
+                return m.group(1)
+    except Exception:
+        return None
+    return None
+
+def fetch_playlist_upload_dates(entries, max_workers=6, progress_cb=None):
+    """
+    Fetch upload dates for entries in parallel and update the entry dicts.
+    """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    to_fetch = []
+    for idx, e in enumerate(entries):
+        if not e.get("upload_date") and not e.get("date_str"):
+            vid = e.get("id") or e.get("url")
+            to_fetch.append((idx, vid))
+
+    total = len(to_fetch)
+    if total == 0:
+        return entries
+
+    done = 0
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        future_map = {
+            executor.submit(fetch_upload_date_for_video, vid): idx
+            for idx, vid in to_fetch
+        }
+        for fut in as_completed(future_map):
+            idx = future_map[fut]
+            try:
+                date_val = fut.result()
+                if date_val:
+                    entries[idx]["upload_date"] = date_val.replace("-", "")
+                    entries[idx]["date_str"] = date_val
+            except Exception:
+                pass
+            done += 1
+            if progress_cb:
+                progress_cb(done, total)
+
+    return entries
+
+def sort_playlist_entries(entries, sort_mode='date_asc'):
+    """
+    Sort playlist entries intelligently:
+      - 'date_asc': Oldest upload first (Ep 1 -> End)
+      - 'date_desc': Newest upload first (End -> Ep 1)
+      - 'ep_title_asc': Episode number in title (1, 2, 3...)
+      - 'reverse': Reverse current order
+      - 'original': Keep original YouTube order
+    """
+    if not entries:
+        return []
+
+    # Ensure original index is tagged
+    for i, e in enumerate(entries):
+        if "_original_index" not in e:
+            e["_original_index"] = i + 1
+
+    if sort_mode == 'reverse':
+        return list(reversed(entries))
+
+    elif sort_mode == 'original':
+        return sorted(entries, key=lambda x: x.get("_original_index", 0))
+
+    elif sort_mode == 'ep_title_asc':
+        def ep_key(e):
+            num = extract_episode_number(e.get("title", ""))
+            return (0 if num is not None else 1, num if num is not None else 0, e.get("_original_index", 0))
+        return sorted(entries, key=ep_key)
+
+    elif sort_mode == 'date_asc':
+        def date_asc_key(e):
+            d = str(e.get("upload_date") or e.get("date_str") or "")
+            ep_num = extract_episode_number(e.get("title", ""))
+            # If dates are missing, fallback to title episode number or original index
+            if not d:
+                return ("99999999", ep_num if ep_num is not None else e.get("_original_index", 0))
+            return (d, ep_num if ep_num is not None else e.get("_original_index", 0))
+        return sorted(entries, key=date_asc_key)
+
+    elif sort_mode == 'date_desc':
+        def date_desc_key(e):
+            d = str(e.get("upload_date") or e.get("date_str") or "")
+            ep_num = extract_episode_number(e.get("title", ""))
+            if not d:
+                return ("", -(ep_num if ep_num is not None else e.get("_original_index", 0)))
+            return (d, -(ep_num if ep_num is not None else e.get("_original_index", 0)))
+        return sorted(entries, key=date_desc_key, reverse=True)
+
+    return entries
+
 def is_playlist_url(url):
     """Detect if a URL points to a YouTube playlist, show, or collection."""
     if not url:
