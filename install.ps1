@@ -1,5 +1,6 @@
-﻿# YouTube Downloader Pro - Windows Installer
-# One-command install: irm https://raw.githubusercontent.com/DevSajjadAli/youtube-downloader-gui/main/install.ps1 | iex
+& {
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+$ErrorActionPreference = "Stop"
 
 Write-Host ""
 Write-Host "=============================================" -ForegroundColor Cyan
@@ -8,7 +9,6 @@ Write-Host "   github.com/DevSajjadAli/youtube-downloader-gui" -ForegroundColor 
 Write-Host "=============================================" -ForegroundColor Cyan
 Write-Host ""
 
-$ErrorActionPreference = "Stop"
 $InstallDir = "$env:USERPROFILE\YoutubeDownloaderGUI"
 $RepoZip    = "$env:TEMP\ytdl_pro.zip"
 $RepoUrl    = "https://github.com/DevSajjadAli/youtube-downloader-gui/archive/refs/heads/main.zip"
@@ -182,4 +182,5 @@ try {
     }
 } catch {
     Write-Host "   Launch using the shortcut on your Desktop." -ForegroundColor Cyan
+}
 }
