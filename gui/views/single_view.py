@@ -77,14 +77,20 @@ class SingleVideoView(ctk.CTkScrollableFrame):
             inner, text="Paste", image=icons.paste(16), compound="left",
             width=88, height=42, fg_color="#374151", hover_color="#4B5563",
             corner_radius=8, command=self.paste_from_clipboard
-        ).grid(row=0, column=1, padx=(0, 8))
+        ).grid(row=0, column=1, padx=(0, 6))
 
         self.fetch_btn = ctk.CTkButton(
             inner, text="Fetch Info", image=icons.video(16), compound="left",
             width=116, height=42, corner_radius=8,
             command=self.on_fetch_info
         )
-        self.fetch_btn.grid(row=0, column=2)
+        self.fetch_btn.grid(row=0, column=2, padx=(0, 6))
+
+        ctk.CTkButton(
+            inner, text="Clear", image=icons.cancel(14), compound="left",
+            width=80, height=42, fg_color="#1F2937", hover_color="#374151",
+            corner_radius=8, command=self.reset_form
+        ).grid(row=0, column=3)
 
         # Quick toggles row
         toggles_row = ctk.CTkFrame(url_card, fg_color="transparent")
@@ -557,6 +563,31 @@ class SingleVideoView(ctk.CTkScrollableFrame):
 
         threading.Thread(target=worker, daemon=True).start()
 
+    def reset_form(self):
+        """Reset the download form fields back to pristine state."""
+        self.url_entry.delete(0, "end")
+        self.current_info = None
+        self.title_label.configure(text="Paste a link above and click 'Fetch Info' to preview")
+        self.thumb_label.configure(image=None, text="No Preview")
+        for b in self._tag_badges:
+            try:
+                b.destroy()
+            except Exception:
+                pass
+        self._tag_badges.clear()
+        self.channel_label.configure(text="Channel: —")
+        self.duration_label.configure(text="Duration: —  •  Views: —")
+        self.like_label.configure(text="Likes: —  •  Uploaded: —")
+        self.progress_bar.set(0.0)
+        self.progress_bar.configure(progress_color="#3B82F6")
+        self.stats_label.configure(text="Speed: —  •  ETA: —  •  Progress: 0.0 MB")
+        self.completion_banner.grid_remove()
+        self.status_label.configure(text="Ready for download", text_color="#F3F4F6")
+        try:
+            self.url_entry.focus_set()
+        except Exception:
+            pass
+
     def cancel_download(self):
         if self.cancel_event:
             self.cancel_event.set()
@@ -572,14 +603,22 @@ class SingleVideoView(ctk.CTkScrollableFrame):
         q_key = self.get_selected_quality_key()
         save_dir = self.dir_entry.get().strip() or self.config.get("download_dir", "")
         title = self.current_info.get("title") if self.current_info else url
+        uploader = self.current_info.get("uploader", "Unknown") if self.current_info else "Unknown"
+        thumb = self.current_info.get("thumbnail") if self.current_info else None
+        duration = self.current_info.get("duration", 0) if self.current_info else 0
 
         self.app.queue_view.add_item({
             "type": "single",
             "url": url,
             "title": title,
+            "uploader": uploader,
+            "thumbnail": thumb,
+            "duration": duration,
             "quality_key": q_key,
             "save_dir": save_dir,
             "status": "Pending"
         })
         self.app.log(f"Added to queue: {title}", "info")
-        self.status_label.configure(text="✓ Video added to download queue", text_color="#22C55E")
+        # Reset form immediately so user can paste next link
+        self.reset_form()
+        self.status_label.configure(text=f"✓ '{title[:45]}' added to Queue! Form cleared.", text_color="#22C55E")

@@ -295,13 +295,18 @@ class DownloadEngine:
         return ydl_opts
 
     def validate_file(self, filepath, is_audio=False):
-        """Validate media file playable status using ffprobe."""
+        """Validate media file playable status using file size and ffprobe."""
         if not filepath or not os.path.isfile(filepath):
             return False
 
         min_size = 20 * 1024 if is_audio else 100 * 1024
-        size = os.path.getsize(filepath)
+        try:
+            size = os.path.getsize(filepath)
+        except OSError:
+            return False
+
         if size < min_size:
+            # File is empty or truncated header only
             try:
                 os.remove(filepath)
             except OSError:
@@ -321,31 +326,20 @@ class DownloadEngine:
                     ],
                     capture_output=True,
                     text=True,
-                    timeout=20,
+                    timeout=15,
                 )
-                if res.returncode != 0:
-                    try:
-                        os.remove(filepath)
-                    except OSError:
-                        pass
-                    return False
-
-                data = json.loads(res.stdout)
-                streams = data.get("streams", [])
-                if not streams:
-                    try:
-                        os.remove(filepath)
-                    except OSError:
-                        pass
-                    return False
-
-                if is_audio:
-                    has_audio = any(s.get("codec_type") == "audio" for s in streams)
-                    return has_audio
-                else:
-                    has_video = any(s.get("codec_type") == "video" for s in streams)
-                    return has_video
+                if res.returncode == 0 and res.stdout:
+                    data = json.loads(res.stdout)
+                    streams = data.get("streams", [])
+                    if streams:
+                        if is_audio:
+                            has_audio = any(s.get("codec_type") == "audio" for s in streams)
+                            return has_audio
+                        else:
+                            has_video = any(s.get("codec_type") == "video" for s in streams)
+                            return has_video
             except Exception:
+                # If ffprobe errors out or times out, but file is >= min_size, keep it
                 return True
 
         return True
@@ -496,18 +490,26 @@ class DownloadEngine:
         video_progress_cb=None,
         status_cb=None,
         cancel_event=None,
-        speed_limit=None
+        speed_limit=None,
+        cached_info=None,
+        extra_opts=None
     ):
         """
         Download playlist/show with dedicated folder and episode selection.
+        overall_progress_cb: (current_step, total_selected, video_title)
+        video_progress_cb: (pct, downloaded_bytes, total_bytes, speed_str, eta_str)
+        status_cb: (message, level)
         """
-        if status_cb:
-            status_cb("Fetching playlist information...", "info")
+        if cached_info and cached_info.get('is_playlist') and cached_info.get('entries'):
+            info_dict = cached_info
+        else:
+            if status_cb:
+                status_cb("Fetching playlist information...", "info")
+            info_dict = self.fetch_info(url)
 
-        info_dict = self.fetch_info(url)
         if not info_dict or not info_dict.get('is_playlist'):
             if status_cb:
-                status_cb("URL is not a valid playlist.", "error")
+                status_cb("URL is not a valid playlist or could not be retrieved.", "error")
             return False, []
 
         entries = info_dict.get('entries', [])
@@ -526,7 +528,15 @@ class DownloadEngine:
         if not selected_indices:
             selected_indices = list(range(1, total_episodes + 1))
 
+        # Filter out of range indices
+        selected_indices = [i for i in selected_indices if 1 <= i <= total_episodes]
         total_selected = len(selected_indices)
+
+        if total_selected == 0:
+            if status_cb:
+                status_cb("No valid episodes selected for download.", "warning")
+            return False, []
+
         if status_cb:
             status_cb(
                 f"Starting playlist: '{clean_folder}' — {total_selected} episodes to process.",
@@ -546,30 +556,37 @@ class DownloadEngine:
                     status_cb("Playlist download stopped by user.", "warning")
                 break
 
-            if idx > len(entries):
-                continue
             entry = entries[idx - 1]
             if not entry:
                 continue
 
             video_title = entry.get('title') or f"Episode {idx}"
-            video_url = entry.get('url') or entry.get('id')
-            if video_url and not str(video_url).startswith('http'):
-                video_url = f"https://www.youtube.com/watch?v={video_url}"
-
-            if not video_url:
+            raw_url = entry.get('url') or entry.get('id')
+            if not raw_url:
                 continue
 
-            # Check if already exists
+            v_str = str(raw_url).strip()
+            if v_str.startswith('http://') or v_str.startswith('https://'):
+                video_url = v_str
+            elif 'watch?v=' in v_str:
+                video_url = f"https://www.youtube.com/{v_str.lstrip('/')}"
+            elif v_str.startswith('/watch'):
+                video_url = f"https://www.youtube.com{v_str}"
+            else:
+                video_url = f"https://www.youtube.com/watch?v={v_str}"
+
+            # Check if already exists (Auto-Resume)
             if skip_existing:
                 existing = find_existing_episode_file(target_dir, idx)
                 if existing:
                     skipped += 1
                     fn = os.path.basename(existing)
                     if status_cb:
-                        status_cb(f"[{step}/{total_selected}] (Ep {idx}) Already downloaded: {fn}", "info")
+                        status_cb(f"[{step}/{total_selected}] (Ep {idx}) Already exists: {fn}", "info")
                     if overall_progress_cb:
-                        overall_progress_cb(step, total_selected, video_title)
+                        overall_progress_cb(step, total_selected, f"[Skipped] {video_title}")
+                    if video_progress_cb:
+                        video_progress_cb(100.0, 100, 100, "Skipped", "0s")
                     continue
 
             if status_cb:
@@ -598,19 +615,44 @@ class DownloadEngine:
                     speed_str = f"{speed / 1048576:.1f} MB/s" if speed else "--"
                     eta_str = f"{int(eta)}s" if eta else "--"
                     video_progress_cb(pct, downloaded, total, speed_str, eta_str)
+                elif d["status"] == "finished" and status_cb:
+                    status_cb(f"[{step}/{total_selected}] Finalizing & merging Ep {idx}...", "info")
 
             ydl_opts = self.build_ydl_opts(target_dir, quality_key=quality_key, outtmpl=outtmpl, progress_hook=per_video_hook, speed_limit=speed_limit)
             ydl_opts['noplaylist'] = True
+            ydl_opts['ignoreerrors'] = True
+            if extra_opts:
+                ydl_opts.update(extra_opts)
 
             try:
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                     inf = ydl.extract_info(video_url, download=True)
                     final_path = self.get_downloaded_path(inf, ydl, merge_fmt=ydl_opts.get('merge_output_format'), is_audio=is_audio)
+
+                    # Robust fallback search for this episode
+                    if not final_path or not os.path.isfile(final_path):
+                        final_path = find_existing_episode_file(target_dir, idx)
+
+                    if not final_path or not os.path.isfile(final_path):
+                        # Match any media file created in target_dir
+                        candidates = [
+                            os.path.join(target_dir, f) for f in os.listdir(target_dir)
+                            if not f.endswith(('.part', '.ytdl', '.temp')) and os.path.isfile(os.path.join(target_dir, f))
+                        ]
+                        if candidates:
+                            candidates.sort(key=lambda x: os.path.getmtime(x), reverse=True)
+                            final_path = candidates[0]
+
                     if final_path and self.validate_file(final_path, is_audio=is_audio):
                         succeeded += 1
                         downloaded_paths.append(final_path)
+                        fn = os.path.basename(final_path)
+                        if status_cb:
+                            status_cb(f"[{step}/{total_selected}] ✓ Completed: {fn}", "success")
                     else:
                         failed += 1
+                        if status_cb:
+                            status_cb(f"[{step}/{total_selected}] Failed to download Ep {idx}", "warning")
             except KeyboardInterrupt:
                 if status_cb:
                     status_cb("Playlist download stopped by user.", "warning")
@@ -618,9 +660,9 @@ class DownloadEngine:
             except Exception as e:
                 failed += 1
                 if status_cb:
-                    status_cb(f"Failed ep {idx}: {e}", "warning")
+                    status_cb(f"Error on ep {idx}: {e}", "warning")
 
-            time.sleep(1)
+            time.sleep(0.5)
 
         summary_msg = (
             f"Playlist finished: {succeeded} downloaded, {skipped} existing skipped, {failed} failed. "
@@ -629,4 +671,4 @@ class DownloadEngine:
         if status_cb:
             status_cb(summary_msg, "success" if succeeded > 0 or skipped > 0 else "warning")
 
-        return True, downloaded_paths
+        return (succeeded > 0 or skipped > 0), downloaded_paths

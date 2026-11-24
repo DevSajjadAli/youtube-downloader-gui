@@ -74,14 +74,20 @@ class PlaylistView(ctk.CTkScrollableFrame):
             inner, text="Paste", image=icons.paste(16), compound="left",
             width=88, height=42, fg_color="#374151", hover_color="#4B5563",
             corner_radius=8, command=self.paste_from_clipboard
-        ).grid(row=0, column=1, padx=(0, 8))
+        ).grid(row=0, column=1, padx=(0, 6))
 
         self.fetch_btn = ctk.CTkButton(
             inner, text="Fetch Playlist", image=icons.playlist(16), compound="left",
-            width=140, height=42, corner_radius=8,
+            width=135, height=42, corner_radius=8,
             command=self.on_fetch_playlist
         )
-        self.fetch_btn.grid(row=0, column=2)
+        self.fetch_btn.grid(row=0, column=2, padx=(0, 6))
+
+        ctk.CTkButton(
+            inner, text="Clear", image=icons.cancel(14), compound="left",
+            width=80, height=42, fg_color="#1F2937", hover_color="#374151",
+            corner_radius=8, command=self.reset_form
+        ).grid(row=0, column=3)
 
         # ── Playlist Overview Card ───────────────────────────────────────────
         self.info_card = ctk.CTkFrame(self, corner_radius=12)
@@ -624,7 +630,8 @@ class PlaylistView(ctk.CTkScrollableFrame):
                 video_progress_cb=video_progress_cb,
                 status_cb=status_cb,
                 cancel_event=self.cancel_event,
-                speed_limit=spd_limit
+                speed_limit=spd_limit,
+                cached_info=self.playlist_info
             )
             title = self.playlist_info.get("title", clean_folder) if self.playlist_info else clean_folder
             append_history(self.config, {
@@ -662,6 +669,40 @@ class PlaylistView(ctk.CTkScrollableFrame):
 
         threading.Thread(target=worker, daemon=True).start()
 
+    def reset_form(self):
+        """Reset the playlist download form back to pristine state."""
+        self.url_entry.delete(0, "end")
+        self.folder_entry.delete(0, "end")
+        self.playlist_info = None
+        self.pl_title_label.configure(
+            text="Paste a playlist link above to inspect all episodes in real-time",
+            text_color=("#F9FAFB", "#F9FAFB")
+        )
+        self.meta_label.configure(text="Channel: —  •  Total Episodes: —")
+        self.mode_var.set("all")
+        for e in self._mode_entries.values():
+            e.delete(0, "end")
+            e.configure(state="disabled")
+        # Clear checklist
+        for w in self.checklist_scroll.winfo_children():
+            try:
+                w.destroy()
+            except Exception:
+                pass
+        self._episode_checks.clear()
+        self.table_card.grid_remove()
+        self.overall_bar.set(0.0)
+        self.overall_bar.configure(progress_color="#3B82F6")
+        self.video_bar.set(0.0)
+        self.overall_label.configure(text="Overall Progress: Ready", text_color="#F3F4F6")
+        self.current_label.configure(text="Current Video: —")
+        self.stats_label.configure(text="Speed: —  •  ETA: —")
+        self.completion_banner.grid_remove()
+        try:
+            self.url_entry.focus_set()
+        except Exception:
+            pass
+
     def cancel_download(self):
         if self.cancel_event:
             self.cancel_event.set()
@@ -693,7 +734,10 @@ class PlaylistView(ctk.CTkScrollableFrame):
             "selected_indices": selected_eps,
             "skip_existing": skip_existing,
             "filename_format": fn_fmt,
-            "status": "Pending"
+            "status": "Pending",
+            "cached_info": self.playlist_info
         })
         self.app.log(f"Added playlist to queue: {title}", "info")
-        self.overall_label.configure(text="✓ Playlist added to download queue", text_color="#22C55E")
+        # Reset form immediately so user can enter another playlist or link
+        self.reset_form()
+        self.overall_label.configure(text=f"✓ Playlist '{title[:40]}' added to Queue! Form cleared.", text_color="#22C55E")
