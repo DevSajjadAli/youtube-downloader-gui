@@ -24,7 +24,7 @@ class ConfigManager:
     def __init__(self, config_path=None):
         if config_path is None:
             # Place config.json next to main.py or in AppData
-            app_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            app_dir = os.environ.get("_YTDL_BASE_DIR", os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
             self.config_path = os.path.join(app_dir, "config.json")
         else:
             self.config_path = config_path

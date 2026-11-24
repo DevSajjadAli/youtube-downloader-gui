@@ -49,7 +49,7 @@ class YouTubeDownloaderApp(ctk.CTk):
         self.minsize(960, 640)
 
         # High-res Window & Taskbar Icons
-        assets_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets")
+        assets_dir = os.path.join(os.environ.get("_YTDL_BASE_DIR", os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "assets")
         ico_file = os.path.join(assets_dir, "icon.ico")
         png_file = os.path.join(assets_dir, "icon.png")
 
@@ -259,7 +259,7 @@ class YouTubeDownloaderApp(ctk.CTk):
             hwnd = user32.GetParent(tk_hwnd) or tk_hwnd
 
             assets_dir = os.path.join(
-                os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets"
+                os.environ.get("_YTDL_BASE_DIR", os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "assets"
             )
             ico_file = os.path.join(assets_dir, "icon.ico")
             if os.path.isfile(ico_file):

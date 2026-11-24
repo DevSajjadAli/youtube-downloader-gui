@@ -218,6 +218,9 @@ class QueueView(ctk.CTkFrame):
         self.metric_stage.configure(text="Idle")
 
     def refresh_list(self):
+        """Rebuild the card list. After rebuild, restore live progress values
+        into the newly created bars so active downloads continue showing
+        correct progress without flickering."""
         for w in self.list_frame.winfo_children():
             w.destroy()
         self._item_bars.clear()
@@ -237,6 +240,15 @@ class QueueView(ctk.CTkFrame):
 
         for idx, item in enumerate(self.items):
             self._make_card(idx, item)
+
+        # After rebuild: restore persisted progress values into new bars
+        for idx, item in enumerate(self.items):
+            prog = item.get("progress", 0.0)
+            stat = item.get("stat_text", "")
+            if idx in self._item_bars and prog > 0:
+                self._item_bars[idx].set(prog)
+            if idx in self._item_stats and stat:
+                self._item_stats[idx].configure(text=stat)
 
     def _make_card(self, idx: int, item: dict):
         status = item.get("status", "Pending")
@@ -383,26 +395,33 @@ class QueueView(ctk.CTkFrame):
 
             item["status"] = "Downloading"
             item["progress"] = 0.0
+            item["stat_text"] = ""
 
             title = item.get("title", item.get("url", "Media"))
             is_single = (item.get("type") == "single")
+            current_idx = idx          # capture current loop value explicitly
+            current_item = item        # capture item ref for closures
 
             # Update monitor card for active item
-            def setup_active_ui(i=idx, t=title, s=is_single):
+            def setup_active_ui(i=current_idx, t=title):
                 self.mon_title.configure(text=f"▶ Downloading: {t[:65]}", text_color="#60A5FA")
                 self.mon_badge.configure(
                     text=f"Item {i+1} of {total}",
                     fg_color="#1E3A8A", text_color="#BFDBFE"
                 )
-                self.active_item_label.configure(text=f"Processing {t[:50]}")
+                self.active_item_label.configure(text=f"Current: {t[:50]}")
                 self.active_pct_label.configure(text="0.0%")
                 self.active_bar.set(0.0)
                 self.active_bar.configure(progress_color="#3B82F6")
                 self.metric_stage.configure(text="Connecting...")
+                self.metric_speed.configure(text="— MB/s")
+                self.metric_eta.configure(text="— ETA")
+                self.metric_size.configure(text="0.0 / 0.0 MB")
                 self.queue_status.configure(
                     text=f"Batch Progress: [{i+1}/{total}] — {t[:50]}",
                     text_color="#F9FAFB"
                 )
+                # overall bar = items completed so far / total
                 self.queue_bar.set(i / total if total > 0 else 0)
                 self.refresh_list()
 
@@ -412,35 +431,55 @@ class QueueView(ctk.CTkFrame):
             q_key = item.get("quality_key", "1")
             save_dir = item.get("save_dir")
 
-            # Detailed live telemetry callbacks
-            def per_item_progress(pct, dl, tot, spd, eta):
-                frac = pct / 100.0
-                item["progress"] = frac
-                dl_mb = dl / 1048576
-                tot_mb = tot / 1048576 if tot > 0 else 0
-                stat_str = f"{pct:.1f}% • {spd} • ETA: {eta}"
-                item["stat_text"] = stat_str
+            # ── Detailed live telemetry callbacks ─────────────────────────
+            # IMPORTANT: capture current_idx and current_item so the
+            # closures don't share the loop variable by reference.
+            def make_progress_cb(cap_idx, cap_item):
+                def per_item_progress(pct, dl, tot, spd, eta):
+                    frac = min(max(pct / 100.0, 0.0), 1.0)
+                    cap_item["progress"] = frac
+                    dl_mb  = dl  / 1048576
+                    tot_mb = tot / 1048576 if tot > 0 else 0
+                    stat_str = f"{pct:.1f}% • {spd} • ETA: {eta}"
+                    cap_item["stat_text"] = stat_str
 
-                def update_mon():
-                    self.active_bar.set(frac)
-                    self.active_pct_label.configure(text=f"{pct:.1f}%")
-                    self.metric_speed.configure(text=spd if spd else "—")
-                    self.metric_eta.configure(text=eta if eta else "—")
-                    self.metric_size.configure(text=f"{dl_mb:.1f} / {tot_mb:.1f} MB")
-                    if idx in self._item_bars:
-                        self._item_bars[idx].set(frac)
-                    if idx in self._item_stats:
-                        self._item_stats[idx].configure(text=f"{pct:.1f}% ({spd})")
-                    if total > 0:
-                        overall_q_pct = ((idx + frac) / total) * 100.0
-                        self.app.set_taskbar_progress(overall_q_pct)
-                        self.queue_bar.set((idx + frac) / total)
+                    def update_mon(
+                        _frac=frac, _pct=pct, _spd=spd, _eta=eta,
+                        _dl_mb=dl_mb, _tot_mb=tot_mb, _cidx=cap_idx
+                    ):
+                        # ── Active-item bar (shows THIS video's progress 0→100%) ──
+                        self.active_bar.set(_frac)
+                        self.active_pct_label.configure(text=f"{_pct:.1f}%")
+                        self.metric_speed.configure(text=_spd if _spd else "—")
+                        self.metric_eta.configure(text=_eta if _eta else "—")
+                        self.metric_size.configure(
+                            text=f"{_dl_mb:.1f} / {_tot_mb:.1f} MB"
+                        )
+                        # ── Per-card mini bar (THIS video's card row) ──
+                        if _cidx in self._item_bars:
+                            self._item_bars[_cidx].set(_frac)
+                        if _cidx in self._item_stats:
+                            self._item_stats[_cidx].configure(
+                                text=f"{_pct:.1f}% ({_spd})"
+                            )
+                        # ── Overall queue bar = items_done + current_frac / total ──
+                        if total > 0:
+                            overall_frac = (_cidx + _frac) / total
+                            overall_pct  = overall_frac * 100.0
+                            self.app.set_taskbar_progress(overall_pct)
+                            self.queue_bar.set(overall_frac)
 
-                self.after(0, update_mon)
+                    self.after(0, update_mon)
+                return per_item_progress
 
-            def per_item_status(msg, level="info"):
-                self.after(0, lambda m=msg: self.metric_stage.configure(text=m[:28]))
-                self.app.log(f"[Queue Item {idx+1}] {msg}", level)
+            def make_status_cb(cap_idx):
+                def per_item_status(msg, level="info"):
+                    self.after(0, lambda m=msg: self.metric_stage.configure(text=m[:30]))
+                    self.app.log(f"[Queue Item {cap_idx+1}] {msg}", level)
+                return per_item_status
+
+            per_item_progress = make_progress_cb(current_idx, current_item)
+            per_item_status   = make_status_cb(current_idx)
 
             if is_single:
                 success, path = self.app.engine.download_single(
@@ -452,11 +491,22 @@ class QueueView(ctk.CTkFrame):
                 )
             else:
                 # Playlist item in queue with full live callbacks
-                def pl_overall_cb(step, tot_eps, ep_title):
-                    def update_pl():
-                        self.active_item_label.configure(text=f"Episode {step}/{tot_eps}: {ep_title[:45]}")
-                        self.metric_stage.configure(text=f"Ep {step}/{tot_eps}")
-                    self.after(0, update_pl)
+                def make_pl_overall_cb(cap_idx):
+                    def pl_overall_cb(step, tot_eps, ep_title):
+                        def update_pl(s=step, te=tot_eps, et=ep_title, ci=cap_idx):
+                            self.active_item_label.configure(
+                                text=f"Episode {s}/{te}: {et[:45]}"
+                            )
+                            self.metric_stage.configure(text=f"Ep {s}/{te}")
+                            # Reset per-episode progress bars when new ep starts
+                            self.active_bar.set(0.0)
+                            self.active_pct_label.configure(text="0.0%")
+                            if ci in self._item_bars:
+                                self._item_bars[ci].set(
+                                    (s - 1) / te if te > 0 else 0
+                                )
+                        self.after(0, update_pl)
+                    return pl_overall_cb
 
                 success, paths = self.app.engine.download_playlist(
                     url, save_dir,
@@ -465,14 +515,16 @@ class QueueView(ctk.CTkFrame):
                     selected_indices=item.get("selected_indices"),
                     skip_existing=item.get("skip_existing", True),
                     filename_format=item.get("filename_format", "numbered_title"),
-                    overall_progress_cb=pl_overall_cb,
+                    overall_progress_cb=make_pl_overall_cb(current_idx),
                     video_progress_cb=per_item_progress,
                     status_cb=per_item_status,
                     cancel_event=self.app.cancel_queue_event,
                     speed_limit=spd_limit,
                     cached_info=item.get("cached_info")
                 )
-                path = paths[0] if paths else (os.path.join(save_dir, item.get("folder_name", "")) if success else None)
+                path = paths[0] if paths else (
+                    os.path.join(save_dir, item.get("folder_name", "")) if success else None
+                )
 
             item["status"] = "Completed" if success else "Failed"
             if success and path:

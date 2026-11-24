@@ -8,7 +8,7 @@ import os
 import customtkinter as ctk
 from PIL import Image
 
-_ICON_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets", "icons")
+_ICON_DIR = os.path.join(os.environ.get("_YTDL_BASE_DIR", os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "assets", "icons")
 _CACHE: dict = {}
 
 

@@ -8,10 +8,24 @@ Repository: https://github.com/DevSajjadAli/youtube-downloader-gui
 import sys
 import os
 
-# Ensure project root is at the head of sys.path
-ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
+# ── Frozen-EXE / PyInstaller support ─────────────────────────────────────────
+# When packaged by PyInstaller, __file__ is inside a temp _MEIPASS directory.
+# We expose BASE_DIR so all modules can call get_base_dir() to find assets.
+if getattr(sys, 'frozen', False):
+    # Running as a PyInstaller bundle
+    BASE_DIR = sys._MEIPASS          # type: ignore[attr-defined]
+    ROOT_DIR  = os.path.dirname(sys.executable)
+else:
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    ROOT_DIR  = BASE_DIR
+
 if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
+if BASE_DIR not in sys.path:
+    sys.path.insert(0, BASE_DIR)
+
+# Make BASE_DIR available globally so gui/ and core/ can import it
+os.environ['_YTDL_BASE_DIR'] = BASE_DIR
 
 # Ensure Windows terminal handles UTF-8 gracefully
 if sys.platform == "win32":
