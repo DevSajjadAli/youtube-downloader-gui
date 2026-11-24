@@ -228,19 +228,12 @@ def main():
     safe_save(logo.resize((128, 128), Image.Resampling.LANCZOS), os.path.join(ASSETS, "logo_small.png"))
 
     icon_base = make_logo(256)
-    sizes = [(16, 16), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)]
-    icon_imgs = [icon_base.resize(s, Image.Resampling.LANCZOS) for s in sizes]
-    rgb_imgs = []
-    for im in icon_imgs:
-        bg = Image.new("RGB", im.size, (30, 30, 46))
-        bg.paste(im, mask=im.split()[3])
-        rgb_imgs.append(bg)
+    sizes = [(16, 16), (24, 24), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)]
     try:
-        rgb_imgs[0].save(
+        icon_base.save(
             os.path.join(ASSETS, "icon.ico"),
             format="ICO",
-            sizes=sizes,
-            append_images=rgb_imgs[1:]
+            sizes=sizes
         )
     except Exception:
         pass

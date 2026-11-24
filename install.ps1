@@ -1,4 +1,4 @@
-# YouTube Downloader Pro - Windows Installer
+﻿# YouTube Downloader Pro - Windows Installer
 # One-command install: irm https://raw.githubusercontent.com/DevSajjadAli/youtube-downloader-gui/main/install.ps1 | iex
 
 Write-Host ""
@@ -123,26 +123,42 @@ if (-not (Test-Path $pythonwPath)) {
 $mainScript = Join-Path $InstallDir "main.py"
 $iconLocation = Join-Path $InstallDir "assets\icon.ico"
 
+# Check for compiled standalone binary first
+$targetExe = $pythonwPath
+$targetArgs = "`"$mainScript`""
+$distExe = Join-Path $InstallDir "dist\YouTubeDownloaderPro\YouTubeDownloaderPro.exe"
+$rootExe = Join-Path $InstallDir "YouTubeDownloaderPro.exe"
+
+if (Test-Path $rootExe) {
+    $targetExe = $rootExe
+    $targetArgs = ""
+} elseif (Test-Path $distExe) {
+    $targetExe = $distExe
+    $targetArgs = ""
+}
+
 # Desktop shortcut
 $DesktopPath = $WshShell.SpecialFolders("Desktop")
 $DesktopLink = Join-Path $DesktopPath "YouTube Downloader Pro.lnk"
+if (Test-Path $DesktopLink) { Remove-Item $DesktopLink -Force -ErrorAction SilentlyContinue }
 $shortcut = $WshShell.CreateShortcut($DesktopLink)
-$shortcut.TargetPath       = $pythonwPath
-$shortcut.Arguments        = "`"$mainScript`""
+$shortcut.TargetPath       = $targetExe
+$shortcut.Arguments        = $targetArgs
 $shortcut.WorkingDirectory = $InstallDir
-if (Test-Path $iconLocation) { $shortcut.IconLocation = $iconLocation }
-$shortcut.Description      = "YouTube Downloader Pro"
+if (Test-Path $iconLocation) { $shortcut.IconLocation = "$iconLocation,0" }
+$shortcut.Description      = "YouTube Downloader Pro — 4K · 1080p · Playlists · MP3"
 $shortcut.Save()
 
 # Start Menu shortcut
 $StartMenuDir = Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs\YouTube Downloader Pro"
 if (-not (Test-Path $StartMenuDir)) { New-Item -ItemType Directory $StartMenuDir | Out-Null }
 $StartLink = Join-Path $StartMenuDir "YouTube Downloader Pro.lnk"
+if (Test-Path $StartLink) { Remove-Item $StartLink -Force -ErrorAction SilentlyContinue }
 $shortcut2 = $WshShell.CreateShortcut($StartLink)
-$shortcut2.TargetPath       = $pythonwPath
-$shortcut2.Arguments        = "`"$mainScript`""
+$shortcut2.TargetPath       = $targetExe
+$shortcut2.Arguments        = $targetArgs
 $shortcut2.WorkingDirectory = $InstallDir
-if (Test-Path $iconLocation) { $shortcut2.IconLocation = $iconLocation }
+if (Test-Path $iconLocation) { $shortcut2.IconLocation = "$iconLocation,0" }
 $shortcut2.Description      = "YouTube Downloader Pro"
 $shortcut2.Save()
 
@@ -151,7 +167,7 @@ Write-Host "=============================================" -ForegroundColor Gree
 Write-Host "   Installation Complete!" -ForegroundColor Green
 Write-Host "=============================================" -ForegroundColor Green
 Write-Host ""
-Write-Host "   - Desktop shortcut created" -ForegroundColor White
+Write-Host "   - Desktop shortcut created with custom logo" -ForegroundColor White
 Write-Host "   - Start Menu entry added" -ForegroundColor White
 Write-Host "   - Installed to: $InstallDir" -ForegroundColor Gray
 Write-Host ""
@@ -159,7 +175,11 @@ Write-Host "   Launching YouTube Downloader Pro..." -ForegroundColor Cyan
 
 # Launch application
 try {
-    Start-Process -FilePath $pythonwPath -ArgumentList "`"$mainScript`"" -WorkingDirectory $InstallDir
+    if ($targetArgs -ne "") {
+        Start-Process -FilePath $targetExe -ArgumentList $targetArgs -WorkingDirectory $InstallDir
+    } else {
+        Start-Process -FilePath $targetExe -WorkingDirectory $InstallDir
+    }
 } catch {
     Write-Host "   Launch using the shortcut on your Desktop." -ForegroundColor Cyan
 }

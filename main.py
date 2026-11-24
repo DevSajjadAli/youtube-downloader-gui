@@ -22,7 +22,7 @@ if sys.platform == "win32":
         pass
     try:
         import ctypes
-        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("DevSajjadAli.YouTubeDownloaderPro.Desktop.v2")
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("DevSajjadAli.YouTubeDownloaderPro.App.v3")
     except Exception:
         pass
 
