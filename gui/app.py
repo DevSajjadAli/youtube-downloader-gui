@@ -250,12 +250,11 @@ class YouTubeDownloaderApp(ctk.CTk):
             self.after(500, self._init_win32_taskbar)
 
     def _build_sidebar_ad(self):
-        """Embed the live full webpage https://bidspotlight.com/ads1x1 in the sidebar."""
+        """Embed the live JSON-driven Bid Spotlight ad unit in the sidebar."""
         self.sidebar_ad = SidebarAdWidget(
             self.sidebar,
-            url="https://bidspotlight.com/ads1x1",
-            width=227,
-            height=227,
+            url="https://bidspotlight.com/ads.json",
+            width=235,
             refresh_ms=300_000,
         )
         self.sidebar_ad.grid(row=11, column=0, padx=8, pady=(0, 6), sticky="ew")
