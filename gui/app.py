@@ -85,7 +85,7 @@ class YouTubeDownloaderApp(ctk.CTk):
 
         # Brand block
         brand_outer = ctk.CTkFrame(self.sidebar, fg_color="transparent")
-        brand_outer.grid(row=0, column=0, padx=14, pady=(22, 8), sticky="ew")
+        brand_outer.grid(row=0, column=0, padx=14, pady=(14, 6), sticky="ew")
 
         # Logo image
         logo_path = os.path.join(assets_dir, "logo_small.png")
@@ -105,7 +105,7 @@ class YouTubeDownloaderApp(ctk.CTk):
 
         # Divider
         ctk.CTkFrame(self.sidebar, height=1, fg_color="#2D2D3A").grid(
-            row=1, column=0, sticky="ew", padx=10, pady=(2, 10)
+            row=1, column=0, sticky="ew", padx=10, pady=(2, 6)
         )
 
         # Section label
@@ -124,7 +124,7 @@ class YouTubeDownloaderApp(ctk.CTk):
 
         ctk.CTkLabel(self.sidebar, text="TOOLS", font=ctk.CTkFont(size=10, weight="bold"),
                      text_color="#6B7280", anchor="w").grid(
-            row=7, column=0, sticky="w", padx=18, pady=(10, 4)
+            row=7, column=0, sticky="w", padx=18, pady=(6, 2)
         )
 
         nav_items_tools = [
@@ -141,7 +141,7 @@ class YouTubeDownloaderApp(ctk.CTk):
                 text=f"  {label}",
                 image=ico,
                 compound="left",
-                height=38,
+                height=34,
                 anchor="w",
                 font=ctk.CTkFont(size=13),
                 corner_radius=8,
@@ -150,7 +150,7 @@ class YouTubeDownloaderApp(ctk.CTk):
                 text_color=("#E5E7EB", "#E5E7EB"),
                 command=lambda k=key: self.select_tab(k)
             )
-            btn.grid(row=row, column=0, padx=10, pady=2, sticky="ew")
+            btn.grid(row=row, column=0, padx=10, pady=1, sticky="ew")
             self.nav_buttons[key] = btn
 
         for r, k, lbl, ico_fn in nav_items:
@@ -169,7 +169,7 @@ class YouTubeDownloaderApp(ctk.CTk):
         # Version label at bottom
         ctk.CTkLabel(self.sidebar, text="v2.1.0  •  yt-dlp powered",
                      font=ctk.CTkFont(size=10), text_color="#4B5563").grid(
-            row=12, column=0, padx=14, pady=(0, 14), sticky="w"
+            row=12, column=0, padx=14, pady=(0, 8), sticky="w"
         )
 
         # ── Content Area ─────────────────────────────────────────────────────

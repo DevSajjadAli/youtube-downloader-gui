@@ -227,11 +227,11 @@ class SidebarAdWidget(ctk.CTkFrame):
             self.body, corner_radius=8, fg_color="#1A1D2E",
             border_width=1, border_color="#2E334D"
         )
-        hero_card.grid(row=0, column=0, sticky="ew", pady=(0, 5))
+        hero_card.grid(row=0, column=0, sticky="ew", pady=(0, 4))
         hero_card.grid_columnconfigure(0, weight=1)
 
-        hero_w = max(self._width - 14, 210)
-        hero_h = 84
+        hero_w = max(self._width - 20, 200)
+        hero_h = 66
         pil_hero = images.get(0)
         if pil_hero is not None:
             rounded = _round_image(pil_hero, (hero_w, hero_h), radius=6)
@@ -242,58 +242,61 @@ class SidebarAdWidget(ctk.CTkFrame):
             )
 
         hero_bar = ctk.CTkFrame(hero_card, fg_color="transparent")
-        hero_bar.grid(row=1, column=0, sticky="ew", padx=6, pady=(4, 5))
+        hero_bar.grid(row=1, column=0, sticky="ew", padx=6, pady=(3, 4))
         hero_bar.grid_columnconfigure(1, weight=1)
 
-        badge1 = _make_rank_badge(1, size=18)
+        badge1 = _make_rank_badge(1, size=16)
         self._image_refs.append(badge1)
         ctk.CTkLabel(
             hero_bar, image=badge1, text="1",
-            font=ctk.CTkFont(size=10, weight="bold"), text_color="#111827"
-        ).grid(row=0, column=0, rowspan=2, padx=(0, 6), sticky="n")
+            font=ctk.CTkFont(size=9, weight="bold"), text_color="#111827"
+        ).grid(row=0, column=0, rowspan=2, padx=(0, 5), sticky="n", pady=(1, 0))
 
         name1 = (hero.get("name") or "Featured").strip()
-        if len(name1) > 24:
-            name1 = name1[:23] + "…"
+        if len(name1) > 17:
+            name1 = name1[:16] + "…"
         tag1 = (hero.get("tagline") or hero.get("domain") or "").strip()
-        if len(tag1) > 28:
-            tag1 = tag1[:27] + "…"
+        if len(tag1) > 22:
+            tag1 = tag1[:21] + "…"
 
         ctk.CTkLabel(
-            hero_bar, text=name1, anchor="w",
-            font=ctk.CTkFont(size=11, weight="bold"), text_color="#F9FAFB"
+            hero_bar, text=name1, anchor="w", height=14,
+            font=ctk.CTkFont(size=10, weight="bold"), text_color="#F9FAFB"
         ).grid(row=0, column=1, sticky="ew")
 
         ctk.CTkLabel(
-            hero_bar, text=tag1, anchor="w",
-            font=ctk.CTkFont(size=9), text_color="#9CA3AF"
+            hero_bar, text=tag1, anchor="w", height=12,
+            font=ctk.CTkFont(size=8), text_color="#9CA3AF"
         ).grid(row=1, column=1, sticky="ew")
 
         price1 = (hero.get("price") or "").strip()
         if price1:
+            if len(price1) > 13:
+                price1 = price1[:12] + "…"
+            pill = ctk.CTkFrame(hero_bar, fg_color="#23273D", corner_radius=4)
+            pill.grid(row=0, column=2, rowspan=2, padx=(4, 0), sticky="e")
             ctk.CTkLabel(
-                hero_bar, text=price1,
+                pill, text=price1, height=14,
                 font=ctk.CTkFont(size=8, weight="bold"),
-                text_color="#F5B301", fg_color="#23273D",
-                corner_radius=4, padx=5, pady=1
-            ).grid(row=0, column=2, rowspan=2, padx=(4, 0), sticky="e")
+                text_color="#F5B301"
+            ).pack(padx=5, pady=1)
 
         self._bind_click(hero_card, hero_url)
 
-        # ── 2. Brand Strip ("Bid Spotlight • Top 3 this month") ──────────────
-        brand_row = ctk.CTkFrame(self.body, fg_color="transparent")
-        brand_row.grid(row=1, column=0, sticky="ew", pady=(1, 4))
+        # ── 2. Brand Strip ("Bid Spotlight  ────  Top 3") ────────────────────
+        brand_row = ctk.CTkFrame(self.body, fg_color="transparent", height=16)
+        brand_row.grid(row=1, column=0, sticky="ew", pady=(0, 3))
         brand_row.grid_columnconfigure(1, weight=1)
 
         brand_title = ctk.CTkFrame(brand_row, fg_color="transparent")
         brand_title.grid(row=0, column=0, sticky="w")
         ctk.CTkLabel(
-            brand_title, text="Bid ",
-            font=ctk.CTkFont(size=10, weight="bold"), text_color="#F9FAFB"
+            brand_title, text="Bid ", height=14,
+            font=ctk.CTkFont(size=9, weight="bold"), text_color="#F9FAFB"
         ).pack(side="left")
         ctk.CTkLabel(
-            brand_title, text="Spotlight",
-            font=ctk.CTkFont(size=10, weight="bold"), text_color="#F5B301"
+            brand_title, text="Spotlight", height=14,
+            font=ctk.CTkFont(size=9, weight="bold"), text_color="#F5B301"
         ).pack(side="left")
 
         ctk.CTkFrame(brand_row, height=1, fg_color="#2D3148").grid(
@@ -301,8 +304,8 @@ class SidebarAdWidget(ctk.CTkFrame):
         )
 
         ctk.CTkLabel(
-            brand_row, text="Top 3",
-            font=ctk.CTkFont(size=9), text_color="#6B7280"
+            brand_row, text="Top 3", height=14,
+            font=ctk.CTkFont(size=8), text_color="#6B7280"
         ).grid(row=0, column=2, sticky="e")
 
         self._bind_click(brand_row, site.get("homepage", "https://bidspotlight.com"))
@@ -314,8 +317,8 @@ class SidebarAdWidget(ctk.CTkFrame):
             mini_row.grid_columnconfigure(0, weight=1, uniform="mini")
             mini_row.grid_columnconfigure(1, weight=1, uniform="mini")
 
-            mini_w = max((self._width - 22) // 2, 95)
-            mini_h = 46
+            mini_w = max((self._width - 28) // 2, 92)
+            mini_h = 38
 
             for idx in range(1, min(3, len(top))):
                 item = top[idx]
@@ -340,7 +343,7 @@ class SidebarAdWidget(ctk.CTkFrame):
                     )
 
                 info = ctk.CTkFrame(card, fg_color="transparent")
-                info.grid(row=1, column=0, sticky="ew", padx=5, pady=(3, 4))
+                info.grid(row=1, column=0, sticky="ew", padx=4, pady=(2, 3))
                 info.grid_columnconfigure(1, weight=1)
 
                 badge = _make_rank_badge(rank, size=14)
@@ -349,22 +352,22 @@ class SidebarAdWidget(ctk.CTkFrame):
                 ctk.CTkLabel(
                     info, image=badge, text=str(rank),
                     font=ctk.CTkFont(size=8, weight="bold"), text_color=fg_txt
-                ).grid(row=0, column=0, rowspan=2, padx=(0, 4), sticky="n")
+                ).grid(row=0, column=0, rowspan=2, padx=(0, 4), sticky="n", pady=(1, 0))
 
                 m_name = (item.get("name") or "Listing").strip()
-                if len(m_name) > 12:
-                    m_name = m_name[:11] + "…"
+                if len(m_name) > 11:
+                    m_name = m_name[:10] + "…"
                 m_price = (item.get("price") or item.get("domain") or "").strip()
-                if len(m_price) > 13:
-                    m_price = m_price[:12] + "…"
+                if len(m_price) > 12:
+                    m_price = m_price[:11] + "…"
 
                 ctk.CTkLabel(
-                    info, text=m_name, anchor="w",
+                    info, text=m_name, anchor="w", height=12,
                     font=ctk.CTkFont(size=9, weight="bold"), text_color="#F9FAFB"
                 ).grid(row=0, column=1, sticky="ew")
 
                 ctk.CTkLabel(
-                    info, text=m_price, anchor="w",
+                    info, text=m_price, anchor="w", height=11,
                     font=ctk.CTkFont(size=8), text_color="#9CA3AF"
                 ).grid(row=1, column=1, sticky="ew")
 
