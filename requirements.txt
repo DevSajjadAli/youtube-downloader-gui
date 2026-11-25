@@ -4,3 +4,4 @@ Pillow>=10.0.0
 imageio-ffmpeg>=0.4.9
 darkdetect>=0.8.0
 tkinterweb>=4.25.0
+pywebview>=6.0.0
