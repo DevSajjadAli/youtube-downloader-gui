@@ -12,6 +12,11 @@ block_cipher = None
 datas = []
 datas += collect_data_files('customtkinter')
 datas += collect_data_files('darkdetect')
+datas += collect_data_files('webview')
+datas += collect_data_files('clr_loader')
+datas += collect_data_files('pythonnet')
+datas += collect_data_files('tkinterweb')
+datas += collect_data_files('tkinterweb_tkhtml')
 
 # ── Add our own assets folder ─────────────────────────────────────────────────
 datas += [
@@ -23,6 +28,9 @@ hiddenimports = []
 hiddenimports += collect_submodules('customtkinter')
 hiddenimports += collect_submodules('PIL')
 hiddenimports += collect_submodules('yt_dlp')
+hiddenimports += collect_submodules('webview')
+hiddenimports += collect_submodules('clr_loader')
+hiddenimports += collect_submodules('pythonnet')
 hiddenimports += [
     'yt_dlp',
     'yt_dlp.extractor',
@@ -41,6 +49,9 @@ hiddenimports += [
     'tkinter',
     'tkinter.filedialog',
     'tkinter.messagebox',
+    'clr',
+    'webview',
+    'tkinterweb',
 ]
 
 a = Analysis(

@@ -1,15 +1,10 @@
 import os
 import sys
 import subprocess
-import webbrowser
 import customtkinter as ctk
 from PIL import Image
 
-try:
-    from tkinterweb import HtmlFrame as _HtmlFrame
-    _TKINTERWEB_OK = True
-except Exception:
-    _TKINTERWEB_OK = False
+from gui.webview_ad import SidebarAdWidget
 
 from core.config import ConfigManager
 from core.engine import DownloadEngine
@@ -255,141 +250,15 @@ class YouTubeDownloaderApp(ctk.CTk):
             self.after(500, self._init_win32_taskbar)
 
     def _build_sidebar_ad(self):
-        """
-        Embed the full live webpage https://bidspotlight.com/ads1x1 in the sidebar.
-        Strategy (best → fallback):
-          1. tkinterweb HtmlFrame.load_url()  — renders actual page, no iframe wrapper needed
-          2. pywebview floating WebView2 panel — Chromium engine, opens on click
-          3. Styled clickable banner           — always-visible last resort
-        Auto-refreshes every 5 minutes so ad content stays current.
-        """
-        _AD_URL = "https://bidspotlight.com/ads1x1"
-
-        # Outer container — no extra border so the web content fills flush
-        ad_outer = ctk.CTkFrame(self.sidebar, corner_radius=10,
-                                fg_color="#161625", border_width=1, border_color="#2D2D3A")
-        ad_outer.grid(row=11, column=0, padx=8, pady=(0, 6), sticky="ew")
-        ad_outer.grid_columnconfigure(0, weight=1)
-
-        # Thin header: "Sponsored" text + ↗ open-in-browser micro-button
-        hdr = ctk.CTkFrame(ad_outer, fg_color="transparent", height=22)
-        hdr.grid(row=0, column=0, sticky="ew", padx=6, pady=(5, 1))
-        hdr.grid_columnconfigure(0, weight=1)
-        hdr.grid_propagate(False)
-
-        ctk.CTkLabel(
-            hdr, text="Sponsored",
-            font=ctk.CTkFont(size=9), text_color="#374151"
-        ).grid(row=0, column=0, sticky="w")
-
-        ctk.CTkButton(
-            hdr, text="↗", width=20, height=18, corner_radius=3,
-            font=ctk.CTkFont(size=9), fg_color="transparent", hover_color="#1F2937",
-            text_color="#4B5563",
-            command=lambda: webbrowser.open(_AD_URL)
-        ).grid(row=0, column=1, sticky="e")
-
-        # ── Method 1: tkinterweb — load full URL directly (best embedded option) ──
-        if _TKINTERWEB_OK:
-            try:
-                web = _HtmlFrame(
-                    ad_outer,
-                    messages_enabled=False,
-                    vertical_scrollbar=False,
-                    horizontal_scrollbar=False,
-                )
-                # ~235 px tall fits the sidebar nicely; sidebar is 255 px wide
-                web.configure(height=235)
-                web.grid(row=1, column=0, sticky="ew", padx=4, pady=(0, 5))
-
-                # Load the actual URL — no iframe wrapper, renders the real page
-                web.load_url(_AD_URL)
-
-                # Auto-refresh every 5 minutes so ad content updates live
-                def _auto_refresh():
-                    try:
-                        web.load_url(_AD_URL)
-                    except Exception:
-                        pass
-                    # Schedule next refresh (5 min = 300 000 ms)
-                    self.after(300_000, _auto_refresh)
-
-                self.after(300_000, _auto_refresh)
-
-                # Manual refresh button (tiny, below the ad)
-                refresh_row = ctk.CTkFrame(ad_outer, fg_color="transparent")
-                refresh_row.grid(row=2, column=0, sticky="ew", padx=6, pady=(0, 4))
-                refresh_row.grid_columnconfigure(0, weight=1)
-
-                ctk.CTkButton(
-                    refresh_row,
-                    text="⟳  Refresh Ad",
-                    height=20, corner_radius=4,
-                    font=ctk.CTkFont(size=9),
-                    fg_color="#1F2937", hover_color="#374151",
-                    text_color="#6B7280",
-                    command=lambda: web.load_url(_AD_URL)
-                ).grid(row=0, column=0, sticky="e")
-
-                return   # ✅ success — full page embedded
-            except Exception:
-                pass  # fall through
-
-        # ── Method 2: pywebview — Chromium WebView2 floating panel ───────────
-        try:
-            import webview as _webview  # pywebview
-
-            def _open_webview_panel():
-                """Open a compact always-on-top WebView2 panel next to the app."""
-                import threading
-                def _run():
-                    win = _webview.create_window(
-                        "BidSpotlight Ads",
-                        _AD_URL,
-                        width=320, height=350,
-                        resizable=True,
-                        on_top=True,
-                        frameless=False,
-                    )
-                    _webview.start()
-                threading.Thread(target=_run, daemon=True).start()
-
-            # Show a premium-looking launch card
-            launch_card = ctk.CTkFrame(ad_outer, corner_radius=8, fg_color="#0D1117", height=90)
-            launch_card.grid(row=1, column=0, sticky="ew", padx=6, pady=(0, 6))
-            launch_card.grid_propagate(False)
-            launch_card.grid_columnconfigure(0, weight=1)
-            launch_card.grid_rowconfigure(0, weight=1)
-
-            inner = ctk.CTkFrame(launch_card, fg_color="transparent")
-            inner.place(relx=0.5, rely=0.5, anchor="center")
-
-            ctk.CTkLabel(inner, text="🏆  BidSpotlight",
-                         font=ctk.CTkFont(size=12, weight="bold"),
-                         text_color="#F9FAFB").pack()
-            ctk.CTkLabel(inner, text="Top 3 Live Deals",
-                         font=ctk.CTkFont(size=10), text_color="#6B7280").pack(pady=(2, 8))
-            ctk.CTkButton(
-                inner, text="Open Ad Panel", width=140, height=28, corner_radius=6,
-                font=ctk.CTkFont(size=10, weight="bold"),
-                fg_color="#1E3A8A", hover_color="#1D4ED8",
-                command=_open_webview_panel
-            ).pack()
-            return  # ✅ pywebview launcher embedded
-
-        except Exception:
-            pass  # fall through to last-resort
-
-        # ── Method 3: styled clickable fallback banner ────────────────────────
-        banner = ctk.CTkButton(
-            ad_outer,
-            text="🏆  Top 3 Deals\nBid Spotlight — View Now",
-            font=ctk.CTkFont(size=11),
-            height=80, corner_radius=8,
-            fg_color="#1E3A8A", hover_color="#1D4ED8",
-            command=lambda: webbrowser.open(_AD_URL)
+        """Embed the live full webpage https://bidspotlight.com/ads1x1 in the sidebar."""
+        self.sidebar_ad = SidebarAdWidget(
+            self.sidebar,
+            url="https://bidspotlight.com/ads1x1",
+            width=227,
+            height=227,
+            refresh_ms=300_000,
         )
-        banner.grid(row=1, column=0, sticky="ew", padx=6, pady=(0, 6))
+        self.sidebar_ad.grid(row=11, column=0, padx=8, pady=(0, 6), sticky="ew")
 
     def _init_win32_taskbar(self):
         """
