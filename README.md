@@ -1,23 +1,23 @@
-﻿<div align="center">
+<div align="center">
 
 <img src="assets/logo.png" width="120" alt="YouTube Downloader Pro Logo"/>
 
 # YouTube Downloader Pro
 
-**The most complete YouTube downloader for Windows â€” built with Python & CustomTkinter**
+**The most complete YouTube downloader for Windows — built with Python & CustomTkinter**
 
 [![GitHub Stars](https://img.shields.io/github/stars/DevSajjadAli/youtube-downloader-gui?style=flat-square&color=yellow)](https://github.com/DevSajjadAli/youtube-downloader-gui/stargazers)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-blue?style=flat-square&logo=python)](https://python.org)
 [![Platform: Windows](https://img.shields.io/badge/Platform-Windows-0078D4?style=flat-square&logo=windows)](https://github.com/DevSajjadAli/youtube-downloader-gui)
 
-Download YouTube videos, full playlists, TV shows, and audio-only tracks â€” in any quality up to 4K â€” with a beautiful modern GUI.
+Download YouTube videos, full playlists, TV shows, and audio-only tracks — in any quality up to 4K — with a beautiful modern GUI.
 
 </div>
 
 ---
 
-## âœ¨ Features
+## Features
 
 | Feature | Description |
 |---------|-------------|
@@ -25,7 +25,7 @@ Download YouTube videos, full playlists, TV shows, and audio-only tracks â€�
 | **4K / 2K / 1080p / 720p / 480p / 360p** | Full quality selection with FFmpeg-powered merging |
 | **MP3 Audio Extraction** | Highest quality audio-only downloads |
 | **Playlist & TV Show Manager** | Each playlist saved to its own named folder automatically |
-| **Episode Range & Skip Filters** | Download all, a range (5â€“15), skip specific eps, or a custom list |
+| **Episode Range & Skip Filters** | Download all, a range (5-15), skip specific eps, or a custom list |
 | **Auto-Resume / Skip Existing** | Skips already-verified files, resumes interrupted sessions |
 | **Batch Download Queue** | Add videos & playlists to a queue, run all at once |
 | **Download History** | Full history with timestamps, status badges, and open-folder buttons |
@@ -40,28 +40,28 @@ Download YouTube videos, full playlists, TV shows, and audio-only tracks â€�
 
 ---
 
-## ðŸš€ One-Command Install (Windows PowerShell)
+## One-Command Install (Windows PowerShell)
 
-Open **Windows PowerShell** (Windows key â†’ type `powershell` â†’ Enter) and run:
+Open **Windows PowerShell** (Windows key → type `powershell` → Enter) and run:
 
 ```powershell
 irm https://raw.githubusercontent.com/DevSajjadAli/youtube-downloader-gui/main/install.ps1 | iex
 ```
 
 This will:
-1. âœ… Check Python 3.10+ is installed
-2. âœ… Install all Python dependencies (`yt-dlp`, `customtkinter`, `Pillow`, etc.)
-3. âœ… Check/prompt for FFmpeg installation
-4. âœ… Create **Desktop shortcut** and **Start Menu entry**
-5. âœ… Generate application icons
+1. Check Python 3.10+ is installed
+2. Install all Python dependencies (`yt-dlp`, `customtkinter`, `Pillow`, etc.)
+3. Check/prompt for FFmpeg installation
+4. Create **Desktop shortcut** and **Start Menu entry**
+5. Generate application icons
 
 After install, double-click **YouTube Downloader Pro** on your Desktop.
 
-> **Requires Python 3.10+** â€” download from [python.org](https://www.python.org/downloads/) if not installed. Make sure "Add Python to PATH" is checked during install.
+> **Requires Python 3.10+** — download from [python.org](https://www.python.org/downloads/) if not installed. Make sure "Add Python to PATH" is checked during install.
 
 ---
 
-## ðŸ”§ Manual Setup
+## Manual Setup
 
 ```bash
 # Clone the repository
@@ -84,7 +84,7 @@ python main.py
 
 <div align="center">
 
-<img src="assets/screenshot.jpg" alt="YouTube Downloader Pro" width="900"/>
+<img src="assets/screenshot.jpg" alt="YouTube Downloader Pro — Single Video, real-time info, 4K quality picker, Bid Spotlight live sidebar" width="900"/>
 
 *Single Video Downloader — real-time stream intelligence, format size estimates, quality presets, subtitle options, and the always-visible live Bid Spotlight sidebar*
 
@@ -92,7 +92,7 @@ python main.py
 
 ---
 
-## ðŸ“‹ Quality Presets
+## Quality Presets
 
 | # | Name | Best For |
 |---|------|----------|
@@ -105,20 +105,20 @@ python main.py
 
 ---
 
-## ðŸŽ¬ Playlist & Episode Control
+## Playlist & Episode Control
 
 | Mode | Input | Effect |
 |------|-------|--------|
-| All Episodes | â€” | Downloads every episode |
+| All Episodes | — | Downloads every episode |
 | Range | `5-15` | Downloads episodes 5 through 15 |
-| Skip Range | `1-3` | Downloads all EXCEPT episodes 1â€“3 |
+| Skip Range | `1-3` | Downloads all EXCEPT episodes 1-3 |
 | Custom List | `1, 3, 5-8, 12` | Downloads only listed episodes |
 
-Playlists are always saved to a **dedicated folder** named after the playlist â€” never mixed into a generic "show" folder.
+Playlists are always saved to a **dedicated folder** named after the playlist — never mixed into a generic folder.
 
 ---
 
-## âš™ï¸ System Requirements
+## System Requirements
 
 - **OS:** Windows 10 / 11
 - **Python:** 3.10 or newer
@@ -132,23 +132,13 @@ customtkinter>=6.0.0
 Pillow>=10.0.0
 imageio-ffmpeg>=0.4.9
 darkdetect>=0.8.0
+tkinterweb>=4.25.0
+pywebview>=6.0.0
 ```
 
 ---
 
-## ðŸ’» CLI Mode
-
-Run without a display or for scripting:
-
-```bash
-python main.py --cli
-# or
-python cli.py
-```
-
----
-
-## ðŸ”„ Updating
+## Updating
 
 ```powershell
 # Re-run the installer to get the latest version
@@ -156,6 +146,7 @@ irm https://raw.githubusercontent.com/DevSajjadAli/youtube-downloader-gui/main/i
 ```
 
 Or manually:
+
 ```bash
 cd "C:\Users\YourName\YoutubeDownloaderGUI"
 git pull
@@ -164,7 +155,7 @@ pip install -r requirements.txt --upgrade
 
 ---
 
-## ðŸ¤ Contributing
+## Contributing
 
 Pull requests are welcome! Please open an issue first to discuss changes.
 
@@ -176,16 +167,16 @@ Pull requests are welcome! Please open an issue first to discuss changes.
 
 ---
 
-## ðŸ“„ License
+## License
 
-MIT License â€” see [LICENSE](LICENSE) for details.
+MIT License — see [LICENSE](LICENSE) for details.
 
 ---
 
 <div align="center">
 
-Made with â¤ï¸ using Python Â· CustomTkinter Â· yt-dlp Â· Pillow
+Made with love using Python · CustomTkinter · yt-dlp · Pillow
 
-**[â­ Star this repo](https://github.com/DevSajjadAli/youtube-downloader-gui)** if it helped you!
+**[Star this repo](https://github.com/DevSajjadAli/youtube-downloader-gui)** if it helped you!
 
 </div>
