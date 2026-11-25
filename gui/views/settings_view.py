@@ -1,14 +1,7 @@
 import os
 import subprocess
 import threading
-import webbrowser
 import customtkinter as ctk
-
-try:
-    from tkinterweb import HtmlFrame as _HtmlFrame
-    _TKINTERWEB_OK = True
-except Exception:
-    _TKINTERWEB_OK = False
 
 try:
     import winsound
@@ -242,112 +235,6 @@ class SettingsView(ctk.CTkScrollableFrame):
         ).pack(side="left")
 
         self.check_ffmpeg()
-
-        # ── Sponsored Ad Card ─────────────────────────────────────────────────
-        self._build_ad_card()
-
-    # ── Ad Card ───────────────────────────────────────────────────────────────
-
-    def _build_ad_card(self):
-        """Embed a responsive BidSpotlight ad unit inside a styled card."""
-        ad_card = ctk.CTkFrame(self, corner_radius=12, border_width=1, border_color="#374151")
-        ad_card.grid(row=6, column=0, sticky="ew", padx=20, pady=(4, 20))
-        ad_card.grid_columnconfigure(0, weight=1)
-
-        # Header row
-        hdr = ctk.CTkFrame(ad_card, fg_color="transparent")
-        hdr.grid(row=0, column=0, sticky="ew", padx=12, pady=(10, 4))
-        hdr.grid_columnconfigure(0, weight=1)
-
-        ctk.CTkLabel(
-            hdr, text="Sponsored",
-            font=ctk.CTkFont(size=9, weight="normal"), text_color="#6B7280"
-        ).grid(row=0, column=0, sticky="w")
-
-        ctk.CTkButton(
-            hdr, text="🔗 Open in Browser", width=130, height=22, corner_radius=4,
-            font=ctk.CTkFont(size=9), fg_color="#1F2937", hover_color="#374151",
-            text_color="#9CA3AF",
-            command=lambda: webbrowser.open("https://bidspotlight.com/ads1x1")
-        ).grid(row=0, column=1, sticky="e")
-
-        # ── Embed via tkinterweb (renders the actual iframe) ──────────────────
-        if _TKINTERWEB_OK:
-            try:
-                web_frame = _HtmlFrame(
-                    ad_card,
-                    messages_enabled=False,
-                    vertical_scrollbar=False,
-                    horizontal_scrollbar=False,
-                )
-                web_frame.grid(row=1, column=0, sticky="nsew", padx=10, pady=(0, 10))
-                web_frame.configure(height=320)
-                ad_card.grid_rowconfigure(1, weight=1)
-
-                _AD_HTML = """<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8">
-<style>
-  * { margin:0; padding:0; box-sizing:border-box; }
-  body { background:#111827; overflow:hidden; }
-  .wrap { width:100%; max-width:360px; margin:0 auto; }
-  .ratio { position:relative; width:100%; aspect-ratio:1/1; }
-  iframe {
-    position:absolute; inset:0;
-    width:100%; height:100%;
-    border:0;
-  }
-</style>
-</head>
-<body>
-  <div class="wrap">
-    <div class="ratio">
-      <iframe src="https://bidspotlight.com/ads1x1"
-              loading="lazy"
-              scrolling="no"
-              referrerpolicy="no-referrer-when-downgrade"
-              title="Bid Spotlight top 3"></iframe>
-    </div>
-  </div>
-</body>
-</html>"""
-                web_frame.load_html(_AD_HTML)
-                return  # successfully embedded
-            except Exception:
-                pass  # fall through to fallback
-
-        # ── Fallback: styled clickable banner ─────────────────────────────────
-        banner = ctk.CTkFrame(ad_card, corner_radius=8, fg_color="#0F172A", height=300)
-        banner.grid(row=1, column=0, sticky="ew", padx=10, pady=(0, 10))
-        banner.grid_propagate(False)
-        banner.grid_columnconfigure(0, weight=1)
-        banner.grid_rowconfigure(0, weight=1)
-
-        inner = ctk.CTkFrame(banner, fg_color="transparent")
-        inner.place(relx=0.5, rely=0.5, anchor="center")
-
-        ctk.CTkLabel(
-            inner, text="🏆",
-            font=ctk.CTkFont(size=48)
-        ).pack(pady=(0, 8))
-
-        ctk.CTkLabel(
-            inner, text="Bid Spotlight",
-            font=ctk.CTkFont(size=18, weight="bold"), text_color="#F9FAFB"
-        ).pack()
-
-        ctk.CTkLabel(
-            inner, text="Today's Top 3 Best Deals",
-            font=ctk.CTkFont(size=12), text_color="#9CA3AF"
-        ).pack(pady=(4, 16))
-
-        ctk.CTkButton(
-            inner, text="  View Deals Now", width=180, height=38, corner_radius=8,
-            font=ctk.CTkFont(size=12, weight="bold"),
-            fg_color="#1E3A8A", hover_color="#1D4ED8",
-            command=lambda: webbrowser.open("https://bidspotlight.com/ads1x1")
-        ).pack()
 
     # ── Handlers ─────────────────────────────────────────────────────────────
 

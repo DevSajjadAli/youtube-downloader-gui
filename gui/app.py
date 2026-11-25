@@ -1,8 +1,15 @@
 import os
 import sys
 import subprocess
+import webbrowser
 import customtkinter as ctk
 from PIL import Image
+
+try:
+    from tkinterweb import HtmlFrame as _HtmlFrame
+    _TKINTERWEB_OK = True
+except Exception:
+    _TKINTERWEB_OK = False
 
 from core.config import ConfigManager
 from core.engine import DownloadEngine
@@ -75,7 +82,7 @@ class YouTubeDownloaderApp(ctk.CTk):
         self.grid_rowconfigure(1, weight=0)  # status bar
 
         # ── Sidebar ──────────────────────────────────────────────────────────
-        self.sidebar = ctk.CTkFrame(self, width=235, corner_radius=0, fg_color=("#1E1E2E", "#1E1E2E"))
+        self.sidebar = ctk.CTkFrame(self, width=255, corner_radius=0, fg_color=("#1E1E2E", "#1E1E2E"))
         self.sidebar.grid(row=0, column=0, sticky="nsew")
         self.sidebar.grid_propagate(False)
         self.sidebar.grid_rowconfigure(10, weight=1)  # spacer
@@ -161,10 +168,13 @@ class YouTubeDownloaderApp(ctk.CTk):
 
         # Spacer row already set via grid_rowconfigure(10, weight=1)
 
+        # ── Sidebar Ad Panel (visible on all pages) ───────────────────────────
+        self._build_sidebar_ad()
+
         # Version label at bottom
         ctk.CTkLabel(self.sidebar, text="v2.1.0  •  yt-dlp powered",
                      font=ctk.CTkFont(size=10), text_color="#4B5563").grid(
-            row=11, column=0, padx=14, pady=(0, 14), sticky="w"
+            row=12, column=0, padx=14, pady=(0, 14), sticky="w"
         )
 
         # ── Content Area ─────────────────────────────────────────────────────
@@ -243,6 +253,76 @@ class YouTubeDownloaderApp(ctk.CTk):
             self._init_win32_taskbar()
             self.after(100, self._init_win32_taskbar)
             self.after(500, self._init_win32_taskbar)
+
+    def _build_sidebar_ad(self):
+        """Embed a live responsive BidSpotlight ad in the sidebar — always visible."""
+        # Outer card
+        ad_outer = ctk.CTkFrame(self.sidebar, corner_radius=10,
+                                fg_color="#161625", border_width=1, border_color="#2D2D3A")
+        ad_outer.grid(row=11, column=0, padx=10, pady=(0, 6), sticky="ew")
+        ad_outer.grid_columnconfigure(0, weight=1)
+
+        # Header strip: "Sponsored" label + open-in-browser link
+        hdr = ctk.CTkFrame(ad_outer, fg_color="transparent")
+        hdr.grid(row=0, column=0, sticky="ew", padx=8, pady=(6, 2))
+        hdr.grid_columnconfigure(0, weight=1)
+
+        ctk.CTkLabel(
+            hdr, text="Sponsored",
+            font=ctk.CTkFont(size=9), text_color="#4B5563"
+        ).grid(row=0, column=0, sticky="w")
+
+        ctk.CTkButton(
+            hdr, text="↗", width=22, height=18, corner_radius=4,
+            font=ctk.CTkFont(size=10), fg_color="#1F2937", hover_color="#374151",
+            text_color="#6B7280",
+            command=lambda: webbrowser.open("https://bidspotlight.com/ads1x1")
+        ).grid(row=0, column=1, sticky="e")
+
+        # ── Live iframe embed via tkinterweb ─────────────────────────────────
+        if _TKINTERWEB_OK:
+            try:
+                web = _HtmlFrame(
+                    ad_outer,
+                    messages_enabled=False,
+                    vertical_scrollbar=False,
+                    horizontal_scrollbar=False,
+                )
+                # Fix height so it matches the ad square (~230px fits sidebar width of 255)
+                web.configure(height=235)
+                web.grid(row=1, column=0, sticky="ew", padx=6, pady=(0, 6))
+
+                _AD_HTML = """<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8">
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{width:100%;height:100%;overflow:hidden;background:#111827}
+  iframe{width:100%;height:100%;border:0;display:block}
+</style>
+</head>
+<body>
+  <iframe src="https://bidspotlight.com/ads1x1"
+          loading="lazy" scrolling="no"
+          referrerpolicy="no-referrer-when-downgrade"
+          title="Bid Spotlight top 3"></iframe>
+</body>
+</html>"""
+                web.load_html(_AD_HTML)
+                return
+            except Exception:
+                pass  # fall through to fallback
+
+        # ── Fallback: styled clickable banner ─────────────────────────────────
+        banner = ctk.CTkButton(
+            ad_outer,
+            text="🏆  Top 3 Deals\nBid Spotlight",
+            font=ctk.CTkFont(size=11),
+            height=70, corner_radius=8,
+            fg_color="#1E3A8A", hover_color="#1D4ED8",
+            command=lambda: webbrowser.open("https://bidspotlight.com/ads1x1")
+        )
+        banner.grid(row=1, column=0, sticky="ew", padx=6, pady=(0, 6))
 
     def _init_win32_taskbar(self):
         """
