@@ -19,6 +19,36 @@ from .playlist_utils import (
 # Quality presets configuration
 # ──────────────────────────────────────────────────────────────
 
+def clean_single_video_url(url):
+    """
+    Clean and canonicalize a YouTube single video URL.
+    Strips playlist tracking parameters (&list=, &index=) while preserving the video ID.
+    Handles watch?v=, youtu.be/, /shorts/, and mobile URLs.
+    """
+    if not url:
+        return ""
+    u = url.strip()
+    # youtu.be/<id>
+    if "youtu.be/" in u:
+        vid = u.split("youtu.be/")[1].split("?")[0].split("&")[0].strip("/")
+        return f"https://www.youtube.com/watch?v={vid}"
+    # youtube.com/shorts/<id>
+    if "/shorts/" in u:
+        vid = u.split("/shorts/")[1].split("?")[0].split("&")[0].strip("/")
+        return f"https://www.youtube.com/watch?v={vid}"
+    # watch?v=<id>
+    if "watch?v=" in u:
+        try:
+            import urllib.parse
+            parsed = urllib.parse.urlparse(u)
+            qs = urllib.parse.parse_qs(parsed.query)
+            if "v" in qs and qs["v"]:
+                return f"https://www.youtube.com/watch?v={qs['v'][0]}"
+        except Exception:
+            pass
+    return u
+
+
 def parse_speed_limit(val):
     """Convert human speed string (e.g. '2M', '500K') to bytes/sec."""
     if not val:
@@ -85,12 +115,47 @@ QUALITY_PRESETS = {
         'merge_fmt': 'mp4'
     },
     '6': {
-        'name': 'Audio Only (Highest Quality MP3)',
-        'short': 'Audio MP3',
-        'badge': 'MP3',
+        'name': 'Audio Only: MP3 (320 kbps Ultra Quality)',
+        'short': 'Audio MP3 320k',
+        'badge': 'MP3 320k',
         'format_ffmpeg': 'bestaudio/best',
         'format_no_ffmpeg': 'bestaudio[ext=m4a]/bestaudio/best',
         'is_audio': True,
+        'audio_codec': 'mp3',
+        'audio_quality': '320',
+        'merge_fmt': None
+    },
+    '7': {
+        'name': 'Audio Only: MP3 (192 kbps Standard Quality)',
+        'short': 'Audio MP3 192k',
+        'badge': 'MP3 192k',
+        'format_ffmpeg': 'bestaudio/best',
+        'format_no_ffmpeg': 'bestaudio[ext=m4a]/bestaudio/best',
+        'is_audio': True,
+        'audio_codec': 'mp3',
+        'audio_quality': '192',
+        'merge_fmt': None
+    },
+    '8': {
+        'name': 'Audio Only: M4A / AAC (Original Audio Quality)',
+        'short': 'Audio M4A',
+        'badge': 'M4A AAC',
+        'format_ffmpeg': 'bestaudio[ext=m4a]/bestaudio/best',
+        'format_no_ffmpeg': 'bestaudio[ext=m4a]/bestaudio/best',
+        'is_audio': True,
+        'audio_codec': 'm4a',
+        'audio_quality': '128',
+        'merge_fmt': None
+    },
+    '9': {
+        'name': 'Audio Only: WAV (Uncompressed Studio Master)',
+        'short': 'Audio WAV',
+        'badge': 'WAV Lossless',
+        'format_ffmpeg': 'bestaudio/best',
+        'format_no_ffmpeg': 'bestaudio/best',
+        'is_audio': True,
+        'audio_codec': 'wav',
+        'audio_quality': '0',
         'merge_fmt': None
     }
 }
@@ -107,22 +172,30 @@ class DownloadEngine:
         self.ffmpeg_dir = get_ffmpeg_dir()
         return self.ffmpeg_dir
 
-    def fetch_info(self, url):
+    def fetch_info(self, url, force_single=False):
         """
         Extract video or playlist metadata without downloading.
-        Returns a dictionary with normalized information.
+        Returns a dictionary with comprehensive stream intelligence,
+        dynamic quality presets with estimated file sizes, subtitles, and channel stats.
         """
         if not url or not url.strip():
             return None
 
         url = url.strip()
-        is_pl = is_playlist_url(url)
+        has_single_marker = ("watch?v=" in url or "/shorts/" in url or "youtu.be/" in url)
+        if force_single or (has_single_marker and not url.startswith("https://www.youtube.com/playlist")):
+            target_url = clean_single_video_url(url)
+            is_pl = False
+        else:
+            target_url = url
+            is_pl = is_playlist_url(url)
 
         ydl_opts = {
-            'extract_flat': True if is_pl else 'in_playlist',
+            'extract_flat': True if is_pl else False,
+            'noplaylist': True if (force_single or not is_pl) else False,
             'quiet': True,
             'no_warnings': True,
-            'ignoreerrors': True,
+            'ignoreerrors': False if (force_single or not is_pl) else True,
             'http_headers': {
                 'User-Agent': (
                     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
@@ -134,14 +207,16 @@ class DownloadEngine:
 
         try:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                info = ydl.extract_info(url, download=False)
+                info = ydl.extract_info(target_url, download=False)
                 if not info:
                     return None
 
                 entries = info.get('entries')
                 is_actually_playlist = (
-                    entries is not None or
-                    info.get('_type') in ('playlist', 'multi_video', 'channel', 'show')
+                    not force_single and (
+                        entries is not None or
+                        info.get('_type') in ('playlist', 'multi_video', 'channel', 'show')
+                    )
                 )
 
                 if is_actually_playlist:
@@ -172,7 +247,6 @@ class DownloadEngine:
                         else:
                             detected_title = "YouTube Playlist"
 
-                    # Get thumbnail from first entry or playlist
                     thumb = info.get('thumbnail') or (entries_list[0].get('thumbnail') if entries_list else None)
 
                     return {
@@ -183,54 +257,236 @@ class DownloadEngine:
                         'count': len(entries_list),
                         'entries': entries_list,
                         'thumbnail': thumb,
-                        'url': url
+                        'url': target_url
                     }
                 else:
-                    # Single video
+                    # ── Comprehensive Single Video Extraction ─────────────────
                     title = info.get('title', 'YouTube Video')
-                    uploader = info.get('uploader') or info.get('channel') or 'Unknown'
+                    uploader = info.get('uploader') or info.get('channel') or 'Unknown Channel'
+                    channel_url = info.get('channel_url') or info.get('uploader_url') or ''
                     duration = info.get('duration') or 0
-                    thumb = info.get('thumbnail')
                     view_count = info.get('view_count')
-                    formats = info.get('formats', [])
+                    like_count = info.get('like_count')
+                    upload_date = str(info.get('upload_date') or '')
+                    description = info.get('description') or ''
+                    categories = info.get('categories') or []
+                    tags_raw = info.get('tags') or []
 
-                    # Detect available qualities and features
-                    resolutions = []
-                    tags = []
-                    has_60fps = False
+                    # Duration formatting
+                    mins, secs = divmod(int(duration), 60)
+                    hours, mins = divmod(mins, 60)
+                    duration_str = f"{hours:02d}:{mins:02d}:{secs:02d}" if hours else f"{mins:02d}:{secs:02d}"
+
+                    # Subscriber count
+                    subs_count = info.get('channel_follower_count')
+                    if subs_count:
+                        if subs_count >= 1_000_000:
+                            subs_str = f"{subs_count / 1_000_000:.2f}M subscribers"
+                        elif subs_count >= 1_000:
+                            subs_str = f"{subs_count / 1_000:.1f}K subscribers"
+                        else:
+                            subs_str = f"{subs_count} subscribers"
+                    else:
+                        subs_str = ""
+
+                    # Formatted views and likes
+                    view_str = f"{view_count:,} views" if view_count is not None else "— views"
+                    if like_count is not None:
+                        if like_count >= 1_000_000:
+                            like_str = f"{like_count / 1_000_000:.1f}M likes"
+                        elif like_count >= 1_000:
+                            like_str = f"{like_count / 1_000:.1f}K likes"
+                        else:
+                            like_str = f"{like_count:,} likes"
+                    else:
+                        like_str = "— likes"
+
+                    # Upload date format (YYYYMMDD -> DD/MM/YYYY)
+                    if upload_date and len(upload_date) == 8:
+                        upload_date_fmt = f"{upload_date[6:8]}/{upload_date[4:6]}/{upload_date[:4]}"
+                    else:
+                        upload_date_fmt = upload_date or "—"
+
+                    # Pick highest resolution thumbnail
+                    thumbnails = info.get('thumbnails', [])
+                    best_thumb = info.get('thumbnail')
+                    if thumbnails:
+                        try:
+                            valid_thumbs = [t for t in thumbnails if t.get('url')]
+                            if valid_thumbs:
+                                valid_thumbs.sort(key=lambda t: (t.get('width') or 0) * (t.get('height') or 0), reverse=True)
+                                best_thumb = valid_thumbs[0]['url']
+                        except Exception:
+                            pass
+
+                    # Parse streams, resolutions, FPS, and calculate real approximate sizes
+                    formats = info.get('formats', [])
+                    best_audio_size = 0
+                    best_audio_bitrate = 128
+                    for f in formats:
+                        if f.get('vcodec') == 'none' and f.get('acodec') != 'none':
+                            sz = f.get('filesize') or f.get('filesize_approx') or 0
+                            if sz > best_audio_size:
+                                best_audio_size = sz
+                            abr = f.get('abr') or 0
+                            if abr > best_audio_bitrate:
+                                best_audio_bitrate = abr
+
+                    if best_audio_size == 0 and duration > 0:
+                        best_audio_size = int((best_audio_bitrate * 1000 / 8) * duration)
+
+                    res_map = {}
+                    max_fps = 30
                     for f in formats:
                         h = f.get('height')
-                        if h and h not in resolutions:
-                            resolutions.append(h)
-                        if f.get('fps') and f.get('fps') >= 60:
-                            has_60fps = True
+                        if not h:
+                            continue
+                        fps = f.get('fps') or 30
+                        if fps > max_fps:
+                            max_fps = int(fps)
+                        filesize = f.get('filesize') or f.get('filesize_approx') or 0
+                        vcodec = f.get('vcodec', 'none')
+                        acodec = f.get('acodec', 'none')
+                        total_size = filesize + (best_audio_size if acodec == 'none' else 0)
 
-                    resolutions.sort(reverse=True)
+                        if h not in res_map or total_size > res_map[h]['total_size']:
+                            res_map[h] = {
+                                'height': h,
+                                'fps': int(fps) if fps else 30,
+                                'total_size': total_size,
+                                'vcodec': vcodec,
+                                'acodec': acodec,
+                                'format_id': f.get('format_id')
+                            }
+
+                    resolutions = sorted(res_map.keys(), reverse=True)
+
+                    # Dynamic Stream Options tailored specifically for this video
+                    stream_options = []
+                    max_h = resolutions[0] if resolutions else 1080
+                    best_sz = res_map.get(max_h, {}).get('total_size', 0) if resolutions else 0
+                    best_sz_str = f" • ~{best_sz / (1024*1024):.1f} MB" if best_sz > 0 else ""
+                    stream_options.append(f"[1] Best Available (Original: {max_h}p){best_sz_str}")
+
+                    if any(h >= 1080 for h in resolutions):
+                        sz_1080 = res_map.get(1080, {}).get('total_size', 0)
+                        fps_1080 = res_map.get(1080, {}).get('fps', 30)
+                        sz_str = f" • ~{sz_1080 / (1024*1024):.1f} MB" if sz_1080 > 0 else ""
+                        fps_str = f" ({fps_1080}fps)" if fps_1080 and fps_1080 >= 50 else ""
+                        stream_options.append(f"[2] 1080p (Full HD{fps_str}){sz_str} [LED TV Ready]")
+                    elif max_h > 1080:
+                        stream_options.append("[2] 1080p (Full HD — Downscaled) [LED TV Ready]")
+
+                    if any(h >= 720 for h in resolutions):
+                        sz_720 = res_map.get(720, {}).get('total_size', 0)
+                        fps_720 = res_map.get(720, {}).get('fps', 30)
+                        sz_str = f" • ~{sz_720 / (1024*1024):.1f} MB" if sz_720 > 0 else ""
+                        fps_str = f" ({fps_720}fps)" if fps_720 and fps_720 >= 50 else ""
+                        stream_options.append(f"[3] 720p (HD{fps_str}){sz_str} [Universal MP4]")
+
+                    if any(h >= 480 for h in resolutions):
+                        sz_480 = res_map.get(480, {}).get('total_size', 0)
+                        sz_str = f" • ~{sz_480 / (1024*1024):.1f} MB" if sz_480 > 0 else ""
+                        stream_options.append(f"[4] 480p (SD){sz_str}")
+
+                    if any(h >= 360 for h in resolutions):
+                        sz_360 = res_map.get(360, {}).get('total_size', 0)
+                        sz_str = f" • ~{sz_360 / (1024*1024):.1f} MB" if sz_360 > 0 else ""
+                        stream_options.append(f"[5] 360p (Low){sz_str}")
+
+                    # Audio options with estimated sizes
+                    audio_sz_320 = int((320 * 1000 / 8) * duration) if duration > 0 else best_audio_size
+                    audio_sz_192 = int((192 * 1000 / 8) * duration) if duration > 0 else int(best_audio_size * 0.6)
+                    audio_sz_128 = int((128 * 1000 / 8) * duration) if duration > 0 else int(best_audio_size * 0.4)
+
+                    sz_a320 = f" • ~{audio_sz_320 / (1024*1024):.1f} MB" if audio_sz_320 > 0 else ""
+                    sz_a192 = f" • ~{audio_sz_192 / (1024*1024):.1f} MB" if audio_sz_192 > 0 else ""
+                    sz_a128 = f" • ~{audio_sz_128 / (1024*1024):.1f} MB" if audio_sz_128 > 0 else ""
+
+                    stream_options.append(f"[6] Audio Only: MP3 (320 kbps Ultra Quality){sz_a320}")
+                    stream_options.append(f"[7] Audio Only: MP3 (192 kbps Standard Quality){sz_a192}")
+                    stream_options.append(f"[8] Audio Only: M4A / AAC (Original Audio Quality){sz_a128}")
+                    stream_options.append(f"[9] Audio Only: WAV (Uncompressed Studio Master)")
+
+                    # Feature badges
+                    badges = []
                     if any(h >= 2160 for h in resolutions):
-                        tags.append("4K Ultra HD")
+                        badges.append("4K Ultra HD")
                     elif any(h >= 1440 for h in resolutions):
-                        tags.append("2K Quad HD")
+                        badges.append("2K Quad HD")
                     elif any(h >= 1080 for h in resolutions):
-                        tags.append("1080p Full HD")
+                        badges.append("1080p Full HD")
                     elif any(h >= 720 for h in resolutions):
-                        tags.append("720p HD")
+                        badges.append("720p HD")
 
-                    if has_60fps:
-                        tags.append("60 FPS")
+                    if max_fps >= 50:
+                        badges.append(f"{max_fps} FPS")
+
+                    badges.append("LED TV Ready (H.264+AAC)")
+
+                    # Check Shorts
+                    is_short = ("/shorts/" in url) or (info.get('width') and info.get('height') and info['height'] > info['width'])
+                    if is_short:
+                        badges.append("📱 YouTube Short")
+
+                    if categories:
+                        badges.append(f"Category: {categories[0]}")
+
+                    # Subtitles parsing with language names
+                    sub_map = {
+                        'en': 'English', 'es': 'Spanish', 'fr': 'French', 'de': 'German',
+                        'it': 'Italian', 'pt': 'Portuguese', 'ru': 'Russian', 'ja': 'Japanese',
+                        'ko': 'Korean', 'zh': 'Chinese', 'hi': 'Hindi', 'ur': 'Urdu',
+                        'ar': 'Arabic', 'tr': 'Turkish', 'id': 'Indonesian', 'vi': 'Vietnamese',
+                        'bn': 'Bengali', 'pa': 'Punjabi', 'te': 'Telugu', 'ta': 'Tamil'
+                    }
+                    raw_subs = list(info.get('subtitles', {}).keys()) + list(info.get('automatic_captions', {}).keys())
+                    subtitles_list = ["all: All Available Languages", "en: English (Default)"]
+                    seen_sub_codes = {'en'}
+                    for s in raw_subs:
+                        code = s.split('-')[0].lower()
+                        if code not in seen_sub_codes:
+                            seen_sub_codes.add(code)
+                            name = sub_map.get(code, code.upper())
+                            subtitles_list.append(f"{code}: {name}")
+
+                    if len(raw_subs) > 0:
+                        badges.append(f"{len(seen_sub_codes)} Subtitles")
+
+                    width = info.get('width') or (1920 if any(h >= 1080 for h in resolutions) else 1280)
+                    height = info.get('height') or (max_h if resolutions else 720)
+                    dimensions_str = f"{width}x{height} ({max_h}p)"
 
                     return {
                         'is_playlist': False,
                         'title': title,
                         'uploader': uploader,
+                        'channel_url': channel_url,
+                        'subscribers_str': subs_str,
                         'duration': duration,
-                        'thumbnail': thumb,
+                        'duration_str': duration_str,
+                        'thumbnail': best_thumb,
                         'view_count': view_count,
-                        'like_count': info.get('like_count'),
-                        'upload_date': info.get('upload_date', ''),
+                        'view_count_str': view_str,
+                        'like_count': like_count,
+                        'like_count_str': like_str,
+                        'upload_date': upload_date,
+                        'upload_date_str': upload_date_fmt,
+                        'dimensions_str': dimensions_str,
                         'resolutions': resolutions,
-                        'tags': tags,
-                        'url': url
+                        'stream_options': stream_options,
+                        'subtitles_list': subtitles_list,
+                        'badges': badges,
+                        'description': description,
+                        'categories': categories,
+                        'tags': tags_raw[:10],
+                        'is_short': is_short,
+                        'fps': max_fps,
+                        'url': target_url
                     }
+
+        except Exception as e:
+            return {'error': str(e)}
 
         except Exception as e:
             return {'error': str(e)}
@@ -290,12 +546,16 @@ class DownloadEngine:
         if ffmpeg_dir:
             ydl_opts['ffmpeg_location'] = ffmpeg_dir
 
-        if preset['is_audio'] and ffmpeg_dir:
-            ydl_opts['postprocessors'] = [{
+        if preset.get('is_audio') and ffmpeg_dir:
+            codec = preset.get('audio_codec', 'mp3')
+            quality = preset.get('audio_quality', '320')
+            pp = {
                 'key': 'FFmpegExtractAudio',
-                'preferredcodec': 'mp3',
-                'preferredquality': '192',
-            }]
+                'preferredcodec': codec,
+            }
+            if quality and quality != '0':
+                pp['preferredquality'] = quality
+            ydl_opts['postprocessors'] = [pp]
 
         return ydl_opts
 
